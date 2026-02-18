@@ -1,205 +1,282 @@
-import { useCallback, useState, useEffect } from 'react';
-import {
-  GoogleMap,
-  useJsApiLoader,
-  Marker,
-  Polyline,
-  Circle,
-  InfoWindow,
-} from '@react-google-maps/api';
-import { GPSLocation, Geofence } from '@/types/gps';
-import { MAP_CONFIG } from '@/config/api';
-import { Skeleton } from '@/components/ui/skeleton';
+import React, { useState, useEffect } from 'react';
+import { APIProvider, Map, AdvancedMarker, InfoWindow, Polyline } from '@vis.gl/react-google-maps';
+import { GPSLocation } from '@/types/gps';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 interface GPSMapProps {
   locations: GPSLocation[];
-  selectedDevice: string | null;
-  history: GPSLocation[];
-  showHistory: boolean;
-  geofences: Geofence[];
+  height?: string;
 }
 
-const containerStyle = {
-  width: '100%',
-  height: '100%',
-};
+interface InfoWindowState {
+  position: { lat: number; lng: number };
+  content: GPSLocation;
+  isOpen: boolean;
+}
 
-// Classic teardrop pin shape SVG path
-const PIN_PATH = "M12 0C7.31 0 3.5 3.81 3.5 8.5C3.5 14.88 12 24 12 24S20.5 14.88 20.5 8.5C20.5 3.81 16.69 0 12 0ZM12 11.5C10.34 11.5 9 10.16 9 8.5C9 6.84 10.34 5.5 12 5.5C13.66 5.5 15 6.84 15 8.5C15 10.16 13.66 11.5 12 11.5Z";
+const GPSMap: React.FC<GPSMapProps> = ({ locations, height = '600px' }) => {
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const [infoWindow, setInfoWindow] = useState<InfoWindowState | null>(null);
+  const [mapCenter, setMapCenter] = useState({ lat: 28.5450, lng: 77.1926 });
 
-export const GPSMap = ({
-  locations,
-  selectedDevice,
-  history,
-  showHistory,
-  geofences,
-}: GPSMapProps) => {
-  const [map, setMap] = useState<google.maps.Map | null>(null);
-  const [infoWindow, setInfoWindow] = useState<{
-    position: google.maps.LatLngLiteral;
-    content: GPSLocation;
-  } | null>(null);
-
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
-  });
-
-  // Group locations by device and get latest for each
-  const deviceLocations = new Map<string, GPSLocation>();
-  locations.forEach(loc => {
-    const existing = deviceLocations.get(loc.device_id);
-    if (!existing || new Date(loc.timestamp) > new Date(existing.timestamp)) {
-      deviceLocations.set(loc.device_id, loc);
-    }
-  });
-
-  const latestLocations = Array.from(deviceLocations.values());
-
-  // History path for selected device
-  const historyPath = showHistory && selectedDevice
-    ? history
-        .filter(loc => loc.device_id === selectedDevice)
-        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-        .map(loc => ({ lat: loc.latitude, lng: loc.longitude }))
-    : [];
-
-  const onLoad = useCallback((map: google.maps.Map) => {
-    setMap(map);
-  }, []);
-
-  const onUnmount = useCallback(() => {
-    setMap(null);
-  }, []);
-
-  // Center on selected device
+  // DEBUG: Log locations to see the data structure
   useEffect(() => {
-    if (map && selectedDevice) {
-      const device = deviceLocations.get(selectedDevice);
-      if (device) {
-        map.panTo({ lat: device.latitude, lng: device.longitude });
+    console.log('🗺️ GPSMap received locations:', locations);
+    if (locations.length > 0) {
+      console.log('📍 First location details:', locations[0]);
+    }
+  }, [locations]);
+
+  useEffect(() => {
+    if (locations.length > 0) {
+      const validLocations = locations.filter(loc => 
+        (loc.ownLat && loc.ownLat !== 0) || (loc.latitude && loc.latitude !== 0)
+      );
+      
+      if (validLocations.length > 0) {
+        const avgLat = validLocations.reduce((sum, loc) => 
+          sum + (loc.ownLat || loc.latitude || 0), 0
+        ) / validLocations.length;
+        
+        const avgLng = validLocations.reduce((sum, loc) => 
+          sum + (loc.ownLon || loc.longitude || 0), 0
+        ) / validLocations.length;
+        
+        setMapCenter({ lat: avgLat, lng: avgLng });
       }
     }
-  }, [map, selectedDevice, deviceLocations]);
+  }, [locations]);
 
-  if (loadError) {
+  if (!apiKey) {
     return (
-      <div className="flex items-center justify-center h-full bg-muted">
-        <div className="text-center">
-          <p className="text-destructive font-medium">Failed to load Google Maps</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Please check your API key configuration
-          </p>
-        </div>
-      </div>
+      <Card className="p-8 text-center">
+        <p className="text-red-500 font-semibold">Failed to load Google Maps</p>
+        <p className="text-sm text-gray-600 mt-2">Please check your API key configuration</p>
+      </Card>
     );
   }
 
-  if (!isLoaded) {
-    return <Skeleton className="w-full h-full" />;
-  }
+  const handleMarkerClick = (location: GPSLocation, lat: number, lng: number) => {
+    setInfoWindow({
+      position: { lat, lng },
+      content: location,
+      isOpen: true,
+    });
+  };
+
+  const getDeviceMode = (location: GPSLocation) => {
+    console.log(`📊 Device ${location.device_id} mode check:`, {
+      ownGpsValid: location.ownGpsValid,
+      peerValid: location.peerValid,
+      mode: location.ownGpsValid && location.peerValid ? 'cooperative' : 
+            location.ownGpsValid ? 'gps' : 
+            location.peerValid ? 'peer' : 'offline'
+    });
+    
+    if (location.ownGpsValid && location.peerValid) return 'cooperative';
+    if (location.ownGpsValid) return 'gps';
+    if (location.peerValid) return 'peer';
+    return 'offline';
+  };
+
+  const getModeColor = (mode: string) => {
+    switch (mode) {
+      case 'cooperative': return '#10b981'; // Green - Energy efficient
+      case 'gps': return '#3b82f6'; // Blue - Normal
+      case 'peer': return '#f59e0b'; // Orange - Backup
+      case 'offline': return '#ef4444'; // Red - No signal
+      default: return '#6b7280';
+    }
+  };
+
+  const getModeLabel = (mode: string) => {
+    switch (mode) {
+      case 'cooperative': return 'Cooperative Mode';
+      case 'gps': return 'GPS Mode';
+      case 'peer': return 'Peer Mode';
+      case 'offline': return 'Offline';
+      default: return 'Unknown';
+    }
+  };
 
   return (
-    <GoogleMap
-      mapContainerStyle={containerStyle}
-      center={MAP_CONFIG.defaultCenter}
-      zoom={MAP_CONFIG.defaultZoom}
-      onLoad={onLoad}
-      onUnmount={onUnmount}
-      options={{
-        mapTypeControl: true,
-        streetViewControl: false,
-        fullscreenControl: true,
-        zoomControl: true,
-      }}
-    >
-      {/* Geofence circles */}
-      {geofences.map(zone => (
-        <Circle
-          key={zone.id}
-          center={zone.center}
-          radius={zone.radius}
-          options={{
-            fillColor: zone.color,
-            fillOpacity: 0.2,
-            strokeColor: zone.color,
-            strokeOpacity: 0.8,
-            strokeWeight: 2,
-          }}
-        />
-      ))}
+    <div className="relative">
+      {/* Legend */}
+      <div className="absolute top-4 right-4 z-10 bg-white rounded-lg shadow-lg p-4 space-y-2 max-w-[200px]">
+        <h3 className="font-semibold text-sm mb-2">Device Status</h3>
+        <div className="flex items-center gap-2 text-xs">
+          <div className="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></div>
+          <span>Cooperative</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <div className="w-3 h-3 rounded-full bg-blue-500 flex-shrink-0"></div>
+          <span>GPS Mode</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <div className="w-3 h-3 rounded-full bg-orange-500 flex-shrink-0"></div>
+          <span>Peer Mode</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <div className="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></div>
+          <span>Offline</span>
+        </div>
+      </div>
 
-      {/* History trail */}
-      {historyPath.length > 1 && (
-        <Polyline
-          path={historyPath}
-          options={{
-            strokeColor: '#3b82f6',
-            strokeOpacity: 0.8,
-            strokeWeight: 3,
-            icons: [
-              {
-                icon: {
-                  path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                  scale: 3,
-                },
-                offset: '100%',
-                repeat: '100px',
-              },
-            ],
-          }}
-        />
-      )}
-
-      {/* Device markers */}
-      {latestLocations.map(location => (
-        <Marker
-          key={location.device_id}
-          position={{ lat: location.latitude, lng: location.longitude }}
-          title={location.device_id}
-          icon={{
-            path: PIN_PATH,
-            scale: selectedDevice === location.device_id ? 1.8 : 1.4,
-            fillColor: selectedDevice === location.device_id ? '#3b82f6' : '#22c55e',
-            fillOpacity: 1,
-            strokeColor: '#ffffff',
-            strokeWeight: 1,
-            anchor: new google.maps.Point(12, 24),
-          }}
-          onClick={() => setInfoWindow({
-            position: { lat: location.latitude, lng: location.longitude },
-            content: location,
-          })}
-        />
-      ))}
-
-      {/* Info Window */}
-      {infoWindow && (
-        <InfoWindow
-          position={infoWindow.position}
-          onCloseClick={() => setInfoWindow(null)}
+      <APIProvider apiKey={apiKey}>
+        <Map
+          style={{ width: '100%', height }}
+          defaultCenter={mapCenter}
+          center={mapCenter}
+          defaultZoom={15}
+          gestureHandling="greedy"
+          disableDefaultUI={false}
+          mapId="worker-tracking-map"
         >
-          <div className="p-2 min-w-[200px]">
-            <h3 className="font-semibold text-sm mb-2">{infoWindow.content.device_id}</h3>
-            <div className="text-xs space-y-1 text-gray-600">
-              <p>
-                <span className="font-medium">Position:</span>{' '}
-                {infoWindow.content.latitude.toFixed(6)}, {infoWindow.content.longitude.toFixed(6)}
-              </p>
-              <p>
-                <span className="font-medium">Accelerometer:</span>{' '}
-                X: {infoWindow.content.ax.toFixed(2)}, 
-                Y: {infoWindow.content.ay.toFixed(2)}, 
-                Z: {infoWindow.content.az.toFixed(2)}
-              </p>
-              <p>
-                <span className="font-medium">Last Update:</span>{' '}
-                {new Date(infoWindow.content.timestamp).toLocaleString()}
-              </p>
-            </div>
-          </div>
-        </InfoWindow>
-      )}
-    </GoogleMap>
+          {locations.map((location) => {
+            const mode = getDeviceMode(location);
+            const modeColor = getModeColor(mode);
+
+            console.log(`🎯 Rendering ${location.device_id}:`, {
+              mode,
+              ownGpsValid: location.ownGpsValid,
+              peerValid: location.peerValid,
+              ownLat: location.ownLat,
+              ownLon: location.ownLon,
+              peerLat: location.peerLat,
+              peerLon: location.peerLon
+            });
+
+            return (
+              <React.Fragment key={`${location.device_id}-${location.timestamp}`}>
+                {/* Own GPS Marker (Blue border) */}
+                {location.ownGpsValid && location.ownLat && location.ownLon && 
+                 location.ownLat !== 0 && location.ownLon !== 0 && (
+                  <AdvancedMarker
+                    position={{ lat: location.ownLat, lng: location.ownLon }}
+                    onClick={() => handleMarkerClick(location, location.ownLat!, location.ownLon!)}
+                  >
+                    <div className="relative">
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg border-4"
+                        style={{
+                          backgroundColor: modeColor,
+                          borderColor: '#3b82f6',
+                        }}
+                      >
+                        {location.device_id.match(/\d+/)?.[0] || '?'}
+                      </div>
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full border-2 border-white"></div>
+                    </div>
+                  </AdvancedMarker>
+                )}
+
+                {/* Peer GPS Marker (Green border) */}
+                {location.peerValid && location.peerLat && location.peerLon && 
+                 location.peerLat !== 0 && location.peerLon !== 0 && (
+                  <AdvancedMarker
+                    position={{ lat: location.peerLat, lng: location.peerLon }}
+                    onClick={() => handleMarkerClick(location, location.peerLat!, location.peerLon!)}
+                  >
+                    <div className="relative">
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg border-4"
+                        style={{
+                          backgroundColor: '#10b981',
+                          borderColor: '#10b981',
+                        }}
+                      >
+                        P{location.peerId || '?'}
+                      </div>
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                    </div>
+                  </AdvancedMarker>
+                )}
+
+                {/* Connecting Line (Cooperative Mode) */}
+                {location.ownGpsValid && location.peerValid && 
+                 location.ownLat && location.ownLon && location.peerLat && location.peerLon &&
+                 location.ownLat !== 0 && location.ownLon !== 0 &&
+                 location.peerLat !== 0 && location.peerLon !== 0 && (
+                  <Polyline
+                    path={[
+                      { lat: location.ownLat, lng: location.ownLon },
+                      { lat: location.peerLat, lng: location.peerLon },
+                    ]}
+                    strokeColor="#10b981"
+                    strokeOpacity={0.6}
+                    strokeWeight={3}
+                    geodesic={true}
+                  />
+                )}
+
+                {/* Fallback: Legacy marker */}
+                {!location.ownGpsValid && !location.peerValid && 
+                 location.latitude && location.longitude &&
+                 location.latitude !== 0 && location.longitude !== 0 && (
+                  <AdvancedMarker
+                    position={{ lat: location.latitude, lng: location.longitude }}
+                    onClick={() => handleMarkerClick(location, location.latitude, location.longitude)}
+                  >
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg"
+                      style={{ backgroundColor: modeColor }}
+                    >
+                      {location.device_id.match(/\d+/)?.[0] || '?'}
+                    </div>
+                  </AdvancedMarker>
+                )}
+              </React.Fragment>
+            );
+          })}
+
+          {/* Info Window */}
+          {infoWindow?.isOpen && (
+            <InfoWindow
+              position={infoWindow.position}
+              onCloseClick={() => setInfoWindow(null)}
+            >
+              <div className="p-2 min-w-[250px]">
+                <h3 className="font-bold text-lg mb-2">{infoWindow.content.device_id}</h3>
+                
+                <Badge 
+                  className="mb-3 text-white"
+                  style={{ backgroundColor: getModeColor(getDeviceMode(infoWindow.content)) }}
+                >
+                  {getModeLabel(getDeviceMode(infoWindow.content))}
+                </Badge>
+
+                {infoWindow.content.ownGpsValid && (
+                  <div className="mb-3 p-2 bg-blue-50 rounded">
+                    <p className="font-semibold text-sm text-blue-700">🔵 Own GPS</p>
+                    <p className="text-xs text-gray-700">
+                      {infoWindow.content.ownLat?.toFixed(6)}, {infoWindow.content.ownLon?.toFixed(6)}
+                    </p>
+                  </div>
+                )}
+
+                {infoWindow.content.peerValid && (
+                  <div className="mb-3 p-2 bg-green-50 rounded">
+                    <p className="font-semibold text-sm text-green-700">🟢 Peer GPS</p>
+                    <p className="text-xs text-gray-700">
+                      {infoWindow.content.peerLat?.toFixed(6)}, {infoWindow.content.peerLon?.toFixed(6)}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      Dist: {infoWindow.content.peerDist?.toFixed(2)}m | ID: {infoWindow.content.peerId}
+                    </p>
+                  </div>
+                )}
+
+                <div className="text-xs text-gray-600">
+                  <p><strong>Updated:</strong> {new Date(infoWindow.content.timestamp).toLocaleTimeString()}</p>
+                </div>
+              </div>
+            </InfoWindow>
+          )}
+        </Map>
+      </APIProvider>
+    </div>
   );
 };
+
+export default GPSMap;

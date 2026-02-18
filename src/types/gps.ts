@@ -1,15 +1,23 @@
 export interface GPSLocation {
-  id?: number;
   device_id: string;
   latitude: number;
   longitude: number;
-  ax: number;
-  ay: number;
-  az: number;
   timestamp: string;
-  locationSource?: 'GPS' | 'PEER' | 'NONE';
+  ax?: number;
+  ay?: number;
+  az?: number;
+  locationSource?: string;
   peerDistance?: number;
   pairId?: number;
+  // NEW: Cooperative transmission fields
+  ownLat?: number;
+  ownLon?: number;
+  ownGpsValid?: boolean;
+  peerLat?: number;
+  peerLon?: number;
+  peerDist?: number;
+  peerId?: number;
+  peerValid?: boolean;
 }
 
 export interface Geofence {
