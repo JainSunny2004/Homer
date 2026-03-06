@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>ST-Homer Seed</title>
+  <style>
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      font-family:'Courier New',monospace; background:#0f172a; color:#94a3b8;
+      display:flex; align-items:center; justify-content:center;
+      height:100vh; flex-direction:column; gap:16px;
+    }
+    .card {
+      background:#1e293b; border:1px solid #334155; border-radius:12px;
+      padding:32px 40px; text-align:center; min-width:400px;
+    }
+    .logo  { font-size:2.5rem; margin-bottom:8px; }
+    .title { color:#e2e8f0; font-size:1.1rem; font-weight:bold; margin-bottom:24px; }
+    .ok    { color:#22c55e; font-size:1.3rem; font-weight:bold; }
+    .err   { color:#ef4444; font-size:1.1rem; font-weight:bold; }
+    .msg   { color:#cbd5e1; font-size:0.9rem; margin-top:8px; }
+    .sub   { color:#64748b; font-size:0.78rem; margin-top:6px; }
+    .rows  { margin-top:20px; text-align:left; font-size:0.78rem; color:#475569; line-height:1.8; }
+    .rows span { color:#22c55e; }
+    .bar  { width:100%; height:4px; background:#1e293b; border-radius:2px; margin-top:20px; overflow:hidden; }
+    .fill { height:100%; background:#22c55e; border-radius:2px; animation:fill 2s linear forwards; }
+    @keyframes fill { from{width:0%} to{width:100%} }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">🏗️</div>
+    <div class="title">ST-Homer Test Seeder</div>
+    <div class="ok"  id="status">⏳ Seeding localStorage...</div>
+    <div class="msg" id="msg"></div>
+    <div class="sub" id="sub"></div>
+    <div class="rows" id="rows"></div>
+    <div class="bar" id="bar" style="display:none"><div class="fill"></div></div>
+  </div>
+  <script>
+    try {
+      localStorage.setItem('polygon-fences',      '[{"id":"test-fence-sprint3","name":"Sprint3 Test Zone","coordinates":[{"lat":28.544,"lng":77.191},{"lat":28.546,"lng":77.191},{"lat":28.546,"lng":77.194},{"lat":28.544,"lng":77.194}],"color":"#22c55e","shiftStart":"00:00","shiftEnd":"23:59","toleranceMeters":20,"isGreenCorridor":false},{"id":"test-corridor-sprint3","name":"Sprint3 Green Corridor","coordinates":[{"lat":28.55,"lng":77.2},{"lat":28.552,"lng":77.2},{"lat":28.552,"lng":77.202},{"lat":28.55,"lng":77.202}],"color":"#86efac","shiftStart":"00:00","shiftEnd":"23:59","toleranceMeters":5,"isGreenCorridor":true}]');
+      localStorage.setItem('worker-assignments',  '[{"id":"test-assignment-01","workerId":"Demo_Tracker_01","fenceId":"test-fence-sprint3","jobLabel":"Demo Worker A"},{"id":"test-assignment-02","workerId":"Demo_Tracker_02","fenceId":"test-fence-sprint3","jobLabel":"Demo Worker B"},{"id":"test-assignment-03","workerId":"Demo_Tracker_03","fenceId":"test-fence-sprint3","jobLabel":"Demo Worker C"}]');
+      localStorage.setItem('manager-settings',     '{"deviceTimeoutSeconds":60,"outOfZoneAlertDelaySeconds":10,"breakDurationValue":15,"breakDurationUnit":"minutes","breakStartTime":"13:00","inactivityThresholdMinutes":5,"inactivityBreakExtendMinutes":15,"silenceAlertMinutes":5,"coMovementThresholdMeters":10,"coMovementDurationSeconds":30,"shiftChangeTime":"02:00","shiftChangeWindowMinutes":5,"autoRefreshIntervalSeconds":3,"defaultMapZoom":16,"showOfflineDevices":true}');
+      const f = JSON.parse(localStorage.getItem('polygon-fences'));
+      const a = JSON.parse(localStorage.getItem('worker-assignments'));
+      document.getElementById('status').textContent = '✅ Seeded successfully!';
+      document.getElementById('msg').textContent    = f.length + ' fences  ·  ' + a.length + ' assignments  ·  settings applied';
+      document.getElementById('sub').textContent    = 'Redirecting to dashboard in 2s...';
+      document.getElementById('bar').style.display  = 'block';
+      document.getElementById('rows').innerHTML     =
+        '📦 <span>' + f[0].name + '</span> — primary fence<br>' +
+        '🟢 <span>' + f[1].name + '</span> — green corridor<br>' +
+        '👷 <span>' + a.map(x => x.workerId).join(', ') + '</span>';
+      setTimeout(() => { window.location.href = 'http://localhost:8080'; }, 2000);
+    } catch(e) {
+      document.getElementById('status').className   = 'err';
+      document.getElementById('status').textContent = '❌ Seed failed';
+      document.getElementById('msg').textContent    = e.message;
+    }
+  </script>
+</body>
+</html>

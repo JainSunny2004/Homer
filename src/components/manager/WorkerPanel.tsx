@@ -1,28 +1,49 @@
-import { useState } from 'react';
-import { PolygonFence, WorkerAssignment, GPSLocation } from '@/types/gps';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Badge } from '@/components/ui/badge';
-import { User, MapPin, Briefcase, Clock, Navigation, AlertCircle, History, Activity, ChevronDown, ChevronRight, Cpu, Satellite, Bluetooth, WifiOff } from 'lucide-react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useState } from "react";
+import { PolygonFence, WorkerAssignment, GPSLocation } from "@/types/gps";
+import { SafetyAlert } from "@/types/alerts";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import {
+  User,
+  MapPin,
+  Briefcase,
+  Clock,
+  Navigation,
+  AlertCircle,
+  History,
+  Activity,
+  ChevronDown,
+  ChevronRight,
+  Cpu,
+  Satellite,
+  Bluetooth,
+  WifiOff,
+} from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { isPointInPolygon, isWithinShift } from '@/lib/geoUtils';
+} from "@/components/ui/select";
+import { isPointInPolygon, isWithinShift } from "@/lib/geoUtils";
+
+// ─── DeviceHistoryDialog ──────────────────────────────────────────────────────
 
 interface DeviceHistoryDialogProps {
   deviceId: string;
@@ -31,143 +52,153 @@ interface DeviceHistoryDialogProps {
   onClose: () => void;
 }
 
-const DeviceHistoryDialog = ({ deviceId, locations, isOpen, onClose }: DeviceHistoryDialogProps) => {
-  // Get all readings for this device, sorted by timestamp (newest first)
+const DeviceHistoryDialog = ({
+  deviceId,
+  locations,
+  isOpen,
+  onClose,
+}: DeviceHistoryDialogProps) => {
   const deviceReadings = locations
-    .filter(loc => loc.device_id === deviceId)
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    .filter((loc) => loc.device_id === deviceId)
+    .sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    );
 
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
+  const formatTimestamp = (ts: string) => {
+    const d = new Date(ts);
     return {
-      date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      date: d.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+      time: d.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }),
     };
   };
 
-  // Calculate movement intensity from accelerometer data
-  const getMovementIntensity = (ax: number, ay: number, az: number) => {
-    const magnitude = Math.sqrt(ax * ax + ay * ay + az * az);
-    if (magnitude < 1.5) return { label: 'Stationary', color: 'bg-muted text-muted-foreground' };
-    if (magnitude < 3) return { label: 'Low', color: 'bg-accent/20 text-accent-foreground' };
-    if (magnitude < 6) return { label: 'Moderate', color: 'bg-primary/20 text-primary' };
-    return { label: 'High', color: 'bg-destructive/20 text-destructive' };
+  const getMovement = (ax: number, ay: number, az: number) => {
+    const m = Math.sqrt(ax * ax + ay * ay + az * az);
+    if (m < 1.5)
+      return { label: "Stationary", color: "bg-muted text-muted-foreground" };
+    if (m < 3)
+      return { label: "Low", color: "bg-accent/20 text-accent-foreground" };
+    if (m < 6)
+      return { label: "Moderate", color: "bg-primary/20 text-primary" };
+    return { label: "High", color: "bg-destructive/20 text-destructive" };
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-lg max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
-        {/* Header */}
-        <div className="flex-shrink-0 p-5 pb-4 border-b bg-gradient-to-r from-primary/5 to-transparent">
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-xl bg-primary/15 flex items-center justify-center ring-1 ring-primary/20">
-              <History className="h-6 w-6 text-primary" />
+        <div className="flex-shrink-0 p-5 pb-4 border-b bg-gradient-to-r from-primary/8 to-transparent">
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-xl bg-primary/15 flex items-center justify-center ring-1 ring-primary/20 flex-shrink-0">
+              <History className="h-5 w-5 text-primary" />
             </div>
-            <div className="flex-1">
-              <DialogTitle className="text-lg font-semibold tracking-tight">{deviceId}</DialogTitle>
-              <div className="flex items-center gap-3 mt-1">
-                <Badge variant="outline" className="text-[10px] font-medium">
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="text-sm font-bold break-all leading-snug">
+                {deviceId}
+              </DialogTitle>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge variant="outline" className="text-[10px]">
                   ESP32
                 </Badge>
-                <span className="text-sm text-muted-foreground">
-                  {deviceReadings.length} reading{deviceReadings.length !== 1 ? 's' : ''}
+                <span className="text-xs text-muted-foreground">
+                  {deviceReadings.length} readings
                 </span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Column Headers */}
-        <div className="flex-shrink-0 px-5 py-2.5 bg-muted/50 border-b">
-          <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="flex-shrink-0 px-5 py-2 bg-muted/40 border-b">
+          <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
             <div className="col-span-5">Location</div>
-            <div className="col-span-4">Accelerometer</div>
+            <div className="col-span-4">Accel</div>
             <div className="col-span-3 text-right">Time</div>
           </div>
         </div>
 
-        {/* Content */}
         <ScrollArea className="flex-1">
-          <div className="p-3 space-y-2">
+          <div className="p-3 space-y-1.5">
             {deviceReadings.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <div className="h-16 w-16 mx-auto mb-4 rounded-full bg-muted/50 flex items-center justify-center">
-                  <Navigation className="h-8 w-8 opacity-40" />
-                </div>
-                <p className="text-sm font-medium">No coordinates recorded</p>
-                <p className="text-xs mt-1 opacity-70">Data will appear when the device reports</p>
+              <div className="text-center py-10 text-muted-foreground">
+                <Navigation className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                <p className="text-sm font-medium">No data yet</p>
               </div>
             ) : (
-              deviceReadings.map((reading, index) => {
-                const { date, time } = formatTimestamp(reading.timestamp);
-                const isLatest = index === 0;
-                const movement = getMovementIntensity(reading.ax, reading.ay, reading.az);
-
+              deviceReadings.map((r, i) => {
+                const { date, time } = formatTimestamp(r.timestamp);
+                const isLatest = i === 0;
+                const mv = getMovement(r.ax, r.ay, r.az);
                 return (
                   <div
-                    key={`${reading.timestamp}-${index}`}
-                    className={`
-                      group relative rounded-lg border p-3 transition-all duration-200
-                      ${isLatest 
-                        ? 'border-primary/40 bg-primary/5 shadow-sm' 
-                        : 'border-border/50 bg-card hover:border-border hover:bg-muted/30'
-                      }
-                    `}
+                    key={`${r.timestamp}-${i}`}
+                    className={`relative rounded-lg border p-3 transition-all duration-150 ${
+                      isLatest
+                        ? "border-primary/40 bg-primary/5 shadow-sm"
+                        : "border-border/40 bg-card hover:bg-muted/20"
+                    }`}
                   >
-                    {/* Latest indicator line */}
                     {isLatest && (
-                      <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-primary rounded-full" />
+                      <div className="absolute left-0 top-3 bottom-3 w-0.5 bg-primary rounded-full" />
                     )}
-
                     <div className="grid grid-cols-12 gap-2 items-start">
-                      {/* Coordinates */}
-                      <div className="col-span-5">
-                        <div className="flex items-start gap-2">
-                          <Navigation className={`h-3.5 w-3.5 mt-0.5 flex-shrink-0 ${isLatest ? 'text-primary' : 'text-muted-foreground'}`} />
-                          <div>
-                            <p className="font-mono text-xs font-medium leading-tight">
-                              {reading.latitude.toFixed(6)}
-                            </p>
-                            <p className="font-mono text-xs font-medium leading-tight text-muted-foreground">
-                              {reading.longitude.toFixed(6)}
-                            </p>
-                          </div>
+                      <div className="col-span-5 flex items-start gap-1.5">
+                        <Navigation
+                          className={`h-3 w-3 mt-0.5 flex-shrink-0 ${isLatest ? "text-primary" : "text-muted-foreground"}`}
+                        />
+                        <div>
+                          <p className="font-mono text-[11px] font-medium">
+                            {r.latitude.toFixed(6)}
+                          </p>
+                          <p className="font-mono text-[11px] text-muted-foreground">
+                            {r.longitude.toFixed(6)}
+                          </p>
                         </div>
                       </div>
-
-                      {/* Accelerometer */}
-                      <div className="col-span-4">
-                        <div className="flex items-start gap-2">
-                          <Activity className={`h-3.5 w-3.5 mt-0.5 flex-shrink-0 ${isLatest ? 'text-primary' : 'text-muted-foreground'}`} />
-                          <div className="space-y-1">
-                            <div className="flex gap-1.5 font-mono text-[10px]">
-                              <span className="text-destructive/80">X:{reading.ax.toFixed(1)}</span>
-                              <span className="text-primary/80">Y:{reading.ay.toFixed(1)}</span>
-                              <span className="text-accent-foreground/80">Z:{reading.az.toFixed(1)}</span>
-                            </div>
-                            <Badge 
-                              variant="secondary" 
-                              className={`text-[9px] px-1.5 py-0 h-4 font-medium ${movement.color}`}
-                            >
-                              {movement.label}
-                            </Badge>
+                      <div className="col-span-4 flex items-start gap-1.5">
+                        <Activity
+                          className={`h-3 w-3 mt-0.5 flex-shrink-0 ${isLatest ? "text-primary" : "text-muted-foreground"}`}
+                        />
+                        <div>
+                          <div className="flex gap-1 font-mono text-[10px]">
+                            <span className="text-red-500/80">
+                              X:{r.ax.toFixed(1)}
+                            </span>
+                            <span className="text-primary/80">
+                              Y:{r.ay.toFixed(1)}
+                            </span>
+                            <span className="text-muted-foreground">
+                              Z:{r.az.toFixed(1)}
+                            </span>
                           </div>
+                          <Badge
+                            variant="secondary"
+                            className={`text-[9px] px-1 py-0 h-3.5 mt-0.5 ${mv.color}`}
+                          >
+                            {mv.label}
+                          </Badge>
                         </div>
                       </div>
-
-                      {/* Timestamp */}
                       <div className="col-span-3 text-right">
-                        <div className="flex flex-col items-end gap-1">
-                          {isLatest && (
-                            <Badge variant="default" className="text-[9px] px-1.5 py-0 h-4">
-                              Latest
-                            </Badge>
-                          )}
-                          <div className="text-[10px] text-muted-foreground">
-                            <p className="font-medium">{time}</p>
-                            <p className="opacity-70">{date}</p>
-                          </div>
-                        </div>
+                        {isLatest && (
+                          <Badge
+                            variant="default"
+                            className="text-[9px] px-1.5 py-0 h-4 mb-0.5"
+                          >
+                            Latest
+                          </Badge>
+                        )}
+                        <p className="font-medium text-[10px]">{time}</p>
+                        <p className="text-[10px] text-muted-foreground opacity-70">
+                          {date}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -177,20 +208,13 @@ const DeviceHistoryDialog = ({ deviceId, locations, isOpen, onClose }: DeviceHis
           </div>
         </ScrollArea>
 
-        {/* Footer Stats */}
         {deviceReadings.length > 0 && (
-          <div className="flex-shrink-0 px-5 py-3 border-t bg-muted/30">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1.5">
-                  <div className="h-2 w-2 rounded-full bg-primary" />
-                  <span>Latest reading</span>
-                </div>
-                <span className="text-[10px]">
-                  {formatTimestamp(deviceReadings[0].timestamp).date} at {formatTimestamp(deviceReadings[0].timestamp).time}
-                </span>
-              </div>
-            </div>
+          <div className="flex-shrink-0 px-5 py-2.5 border-t bg-muted/20 flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+            <span>
+              Latest: {formatTimestamp(deviceReadings[0].timestamp).date} ·{" "}
+              {formatTimestamp(deviceReadings[0].timestamp).time}
+            </span>
           </div>
         )}
       </DialogContent>
@@ -198,383 +222,566 @@ const DeviceHistoryDialog = ({ deviceId, locations, isOpen, onClose }: DeviceHis
   );
 };
 
+// ─── WorkerPanel ──────────────────────────────────────────────────────────────
+
 interface WorkerPanelProps {
   workers: string[];
   fences: PolygonFence[];
   assignments: WorkerAssignment[];
   locations: GPSLocation[];
-  onAssignWorker: (assignment: Omit<WorkerAssignment, 'id'>) => void;
-  onUnassignWorker: (workerId: string) => void;
+  onAssignWorker: (a: Omit<WorkerAssignment, "id">) => void;
+  onUnassignWorker: (id: string) => void;
   apiError?: string | null;
   deviceTimeoutSeconds?: number;
   showOfflineDevices?: boolean;
+  safetyAlerts?: SafetyAlert[];
 }
 
 export const WorkerPanel = ({
-  workers,
-  fences,
-  assignments,
-  locations,
+  workers = [],
+  fences = [],
+  assignments = [],
+  locations = [],
   onAssignWorker,
   onUnassignWorker,
   apiError,
   deviceTimeoutSeconds = 30,
   showOfflineDevices = true,
+  safetyAlerts = [],
 }: WorkerPanelProps) => {
   const [selectedWorker, setSelectedWorker] = useState<string | null>(null);
-  const [selectedFence, setSelectedFence] = useState<string>('');
-  const [jobLabel, setJobLabel] = useState('');
-  const [selectedDeviceHistory, setSelectedDeviceHistory] = useState<string | null>(null);
+  const [selectedFence, setSelectedFence] = useState("");
+  const [jobLabel, setJobLabel] = useState("");
+  const [selectedDeviceHistory, setSelectedDeviceHistory] = useState<
+    string | null
+  >(null);
+  const [onlineOpen, setOnlineOpen] = useState(true);
+  const [offlineOpen, setOfflineOpen] = useState(true);
+  const [deviceLogOpen, setDeviceLogOpen] = useState(true);
 
-  // Get latest location for each device
   const getLatestLocations = (): Map<string, GPSLocation> => {
-    const deviceMap = new Map<string, GPSLocation>();
-    locations.forEach(loc => {
-      const existing = deviceMap.get(loc.device_id);
-      if (!existing || new Date(loc.timestamp) > new Date(existing.timestamp)) {
-        deviceMap.set(loc.device_id, loc);
-      }
+    const map = new Map<string, GPSLocation>();
+    locations.forEach((loc) => {
+      const ex = map.get(loc.device_id);
+      if (!ex || new Date(loc.timestamp) > new Date(ex.timestamp))
+        map.set(loc.device_id, loc);
     });
-    return deviceMap;
+    return map;
   };
 
   const latestLocations = getLatestLocations();
+  const getWorkerLocation = (id: string) => latestLocations.get(id);
 
-  const getWorkerLocation = (workerId: string) => {
-    return latestLocations.get(workerId);
-  };
+  const isDeviceOnline = (loc: GPSLocation | undefined) =>
+    !!loc &&
+    Date.now() - new Date(loc.timestamp).getTime() <
+      deviceTimeoutSeconds * 1000;
+
+  const onlineWorkers = workers.filter((id) =>
+    isDeviceOnline(getWorkerLocation(id)),
+  );
+  const offlineWorkers = workers.filter(
+    (id) => !isDeviceOnline(getWorkerLocation(id)),
+  );
 
   const getWorkerStatus = (workerId: string) => {
-    const assignment = assignments.find(a => a.workerId === workerId);
-    if (!assignment) return { status: 'unassigned', color: 'secondary' as const };
-
-    const fence = fences.find(f => f.id === assignment.fenceId);
-    if (!fence) return { status: 'unassigned', color: 'secondary' as const };
-
+    const assignment = assignments.find((a) => a.workerId === workerId);
+    if (!assignment)
+      return { status: "unassigned", color: "secondary" as const };
+    const fence = fences.find((f) => f.id === assignment.fenceId);
+    if (!fence) return { status: "unassigned", color: "secondary" as const };
     const location = getWorkerLocation(workerId);
-    if (!location) return { status: 'offline', color: 'secondary' as const };
-
-    const now = new Date();
-    const withinShift = isWithinShift(now, fence.shiftStart, fence.shiftEnd);
-    const insideFence = isPointInPolygon(
+    if (!location) return { status: "offline", color: "secondary" as const };
+    if (!isWithinShift(new Date(), fence.shiftStart, fence.shiftEnd))
+      return { status: "off-shift", color: "secondary" as const };
+    return isPointInPolygon(
       { lat: location.latitude, lng: location.longitude },
-      fence.coordinates
-    );
-
-    if (!withinShift) return { status: 'off-shift', color: 'secondary' as const };
-    if (insideFence) return { status: 'in-zone', color: 'default' as const };
-    return { status: 'out-of-zone', color: 'destructive' as const };
+      fence.coordinates,
+    )
+      ? { status: "in-zone", color: "default" as const }
+      : { status: "out-of-zone", color: "destructive" as const };
   };
+
+  const getAlertCount = (id: string) =>
+    safetyAlerts.filter((a) => a.deviceId === id).length;
 
   const handleAssign = () => {
     if (!selectedWorker || !selectedFence || !jobLabel.trim()) return;
-
     onAssignWorker({
       workerId: selectedWorker,
       fenceId: selectedFence,
       jobLabel: jobLabel.trim(),
     });
-
     setSelectedWorker(null);
-    setSelectedFence('');
-    setJobLabel('');
+    setSelectedFence("");
+    setJobLabel("");
   };
 
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
+  const formatTs = (ts: string) =>
+    new Date(ts).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
-  };
 
-  // A device is online if its last reading is within the timeout window
-  const isDeviceOnline = (location: GPSLocation | undefined): boolean => {
-    if (!location) return false;
-    const lastReading = new Date(location.timestamp).getTime();
-    const now = Date.now();
-    const timeoutMs = deviceTimeoutSeconds * 1000;
-    return (now - lastReading) < timeoutMs;
-  };
+  // ── Section header ────────────────────────────────────────────────────────
+  const SectionHeader = ({
+    open,
+    onToggle,
+    dot,
+    label,
+    count,
+    accent,
+  }: {
+    open: boolean;
+    onToggle: () => void;
+    dot?: React.ReactNode;
+    label: string;
+    count: number;
+    accent?: string;
+  }) => (
+    <button
+      onClick={onToggle}
+      className="flex items-center justify-between w-full px-4 py-2.5 border-b border-border hover:bg-muted/40 transition-colors flex-shrink-0"
+    >
+      <div className="flex items-center gap-2">
+        {open ? (
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+        )}
+        {dot}
+        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+          {label}
+        </span>
+      </div>
+      <span
+        className={`h-5 min-w-[20px] px-1.5 rounded-full text-[10px] font-bold flex items-center justify-center ${accent ?? "bg-muted text-muted-foreground"}`}
+      >
+        {count}
+      </span>
+    </button>
+  );
 
-  // Separate workers into online and offline based on timeout
-  const onlineWorkers = workers.filter(workerId => {
-    const location = getWorkerLocation(workerId);
-    return isDeviceOnline(location);
-  });
-
-  const offlineWorkers = workers.filter(workerId => {
-    const location = getWorkerLocation(workerId);
-    return !isDeviceOnline(location);
-  });
-
+  // ── Worker card ───────────────────────────────────────────────────────────
   const renderWorkerCard = (workerId: string) => {
-    const assignment = assignments.find(a => a.workerId === workerId);
-    const fence = assignment ? fences.find(f => f.id === assignment.fenceId) : null;
+    const assignment = assignments.find((a) => a.workerId === workerId);
+    const fence = assignment
+      ? fences.find((f) => f.id === assignment.fenceId)
+      : null;
     const { status, color } = getWorkerStatus(workerId);
     const location = getWorkerLocation(workerId);
     const online = isDeviceOnline(location);
+    const alertCount = getAlertCount(workerId);
+
+    // Status colors
+    const statusStyle =
+      {
+        "in-zone": "bg-green-500/10 text-green-700 border-green-300/60",
+        "out-of-zone": "bg-red-500/10 text-red-700 border-red-300/60",
+        unassigned: "bg-muted text-muted-foreground border-border/60",
+        offline: "bg-muted text-muted-foreground border-border/60",
+        "off-shift": "bg-muted text-muted-foreground border-border/60",
+      }[status] ?? "bg-muted text-muted-foreground border-border/60";
 
     return (
-      <div key={workerId} className="flex items-center gap-3 p-2.5 rounded-lg bg-card/50 border border-border/50 hover:border-border transition-colors">
-        {/* Avatar */}
-        <div className={`h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 ${
-          online ? 'bg-green-500/15 ring-2 ring-green-500/60' : 'bg-muted'
-        }`}>
-          <User className={`h-4 w-4 ${online ? 'text-green-600' : 'text-muted-foreground'}`} />
-        </div>
+      <div
+        key={workerId}
+        className="mx-3 mb-2 rounded-xl border border-border bg-card overflow-hidden transition-all duration-150 hover:shadow-lg hover:-translate-y-px"
+        style={{
+          boxShadow:
+            status === "in-zone"
+              ? "inset 3px 0 0 #c3f832, 0 1px 4px hsl(0 0% 0% / 0.05)"
+              : status === "out-of-zone"
+                ? "inset 3px 0 0 #ef4444, 0 1px 4px hsl(0 0% 0% / 0.05)"
+                : "inset 3px 0 0 hsl(var(--border)), 0 1px 4px hsl(0 0% 0% / 0.05)",
+        }}
+      >
+        <div className="p-2.5 flex items-start gap-2.5">
+          {/* Avatar — initials */}
+          <div
+            className="h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 relative font-bold text-[13px] select-none"
+            style={{
+              backgroundColor: online ? "#c3f83225" : "hsl(var(--muted))",
+              border: online
+                ? "1.5px solid #c3f832"
+                : "1.5px solid hsl(var(--border))",
+              color: online ? "#5a7a00" : "hsl(var(--muted-foreground))",
+              opacity: online ? 1 : 0.6,
+            }}
+          >
+            {workerId
+              .replace(/[^a-zA-Z0-9]/g, "")
+              .slice(0, 2)
+              .toUpperCase()}
 
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="font-medium text-sm truncate">{workerId}</p>
-            <Badge variant={color} className="text-[10px] px-1.5 py-0 h-5 flex-shrink-0">
-              {status}
-            </Badge>
+            {/* Online dot */}
+            {online && (
+              <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-card animate-pulse" />
+            )}
+            {alertCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black rounded-full min-w-[14px] h-3.5 flex items-center justify-center px-0.5 ring-1 ring-card">
+                {alertCount}
+              </span>
+            )}
           </div>
-          {assignment && fence && (
-            <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
-              <span className="flex items-center gap-1 truncate">
-                <MapPin className="h-3 w-3 flex-shrink-0" />
-                {fence.name}
-              </span>
-              <span className="flex items-center gap-1 truncate">
-                <Briefcase className="h-3 w-3 flex-shrink-0" />
-                {assignment.jobLabel}
-              </span>
-            </div>
-          )}
-          {/* BLE Source Badge */}
-          {location?.locationSource && (
-            <div className="flex items-center gap-1.5 mt-1">
-              {location.locationSource === 'GPS' && (
-                <Badge className="text-[9px] px-1.5 py-0 h-4 bg-green-500/15 text-green-700 border-green-500/30 hover:bg-green-500/20">
-                  <Satellite className="h-2.5 w-2.5 mr-1" />
-                  GPS
-                </Badge>
-              )}
-              {location.locationSource === 'PEER' && (
-                <Badge className="text-[9px] px-1.5 py-0 h-4 bg-blue-500/15 text-blue-700 border-blue-500/30 hover:bg-blue-500/20">
-                  <Bluetooth className="h-2.5 w-2.5 mr-1" />
-                  BLE {location.peerDistance ? `· ${location.peerDistance.toFixed(1)}m` : ''}
-                  {location.pairId ? ` · #${location.pairId}` : ''}
-                </Badge>
-              )}
-              {location.locationSource === 'NONE' && (
-                <Badge className="text-[9px] px-1.5 py-0 h-4 bg-destructive/15 text-destructive border-destructive/30 hover:bg-destructive/20">
-                  <WifiOff className="h-2.5 w-2.5 mr-1" />
-                  No Signal
-                </Badge>
-              )}
-            </div>
-          )}
-        </div>
 
-        {/* Action */}
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs"
-              onClick={() => {
-                setSelectedWorker(workerId);
-                setSelectedFence(assignment?.fenceId || '');
-                setJobLabel(assignment?.jobLabel || '');
-              }}
-            >
-              {assignment ? 'Edit' : 'Assign'}
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Assign Worker: {workerId}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Select Task Area</Label>
-                <Select value={selectedFence} onValueChange={setSelectedFence}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a task area" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {fences.map(f => (
-                      <SelectItem key={f.id} value={f.id}>
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-2 h-2 rounded-full"
-                            style={{ backgroundColor: f.color }}
-                          />
-                          {f.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Job Label</Label>
-                <Input
-                  placeholder="e.g., Crane Operator"
-                  value={jobLabel}
-                  onChange={(e) => setJobLabel(e.target.value)}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={handleAssign} className="flex-1">
-                  Save Assignment
-                </Button>
-                {assignment && (
-                  <Button
-                    variant="destructive"
-                    onClick={() => onUnassignWorker(workerId)}
-                  >
-                    Remove
-                  </Button>
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-[13px] leading-tight break-all">
+              {workerId}
+            </p>
+
+            {/* Status + assignment */}
+            <div className="flex items-center flex-wrap gap-1 mt-1">
+              <span
+                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md border ${statusStyle}`}
+              >
+                {status}
+              </span>
+              {fence && (
+                <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 truncate">
+                  <MapPin className="h-2.5 w-2.5 flex-shrink-0" />
+                  {fence.name}
+                </span>
+              )}
+              {assignment?.jobLabel && (
+                <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 truncate">
+                  <Briefcase className="h-2.5 w-2.5 flex-shrink-0" />
+                  {assignment.jobLabel}
+                </span>
+              )}
+            </div>
+
+            {/* Location source */}
+            {location?.locationSource && (
+              <div className="flex items-center gap-1 mt-1.5">
+                {location.locationSource === "GPS" && (
+                  <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-green-500/10 text-green-700 border border-green-300/40">
+                    <Satellite className="h-2.5 w-2.5" />
+                    GPS
+                  </span>
+                )}
+                {location.locationSource === "PEER" && (
+                  <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-700 border border-blue-300/40">
+                    <Bluetooth className="h-2.5 w-2.5" />
+                    BLE
+                    {location.peerDistance
+                      ? ` · ${location.peerDistance.toFixed(1)}m`
+                      : ""}
+                    {location.pairId ? ` · #${location.pairId}` : ""}
+                  </span>
+                )}
+                {location.locationSource === "NONE" && (
+                  <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-destructive/10 text-destructive border border-destructive/20">
+                    <WifiOff className="h-2.5 w-2.5" />
+                    No Signal
+                  </span>
                 )}
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+            )}
+
+            {/* Alert badges */}
+            {alertCount > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {safetyAlerts
+                  .filter((a) => a.deviceId === workerId)
+                  .map((alert) => (
+                    <span
+                      key={alert.id}
+                      className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-md border ${
+                        alert.type === "out-of-zone"
+                          ? "bg-amber-500/10 text-amber-700 border-amber-300/40"
+                          : alert.type === "inactivity"
+                            ? "bg-orange-500/10 text-orange-700 border-orange-300/40"
+                            : alert.type === "silence"
+                              ? "bg-red-500/10 text-red-700 border-red-300/40"
+                              : "bg-blue-500/10 text-blue-700 border-blue-300/40"
+                      }`}
+                    >
+                      {alert.type === "out-of-zone" && "⚠ Out of Zone"}
+                      {alert.type === "inactivity" && "😴 Inactive"}
+                      {alert.type === "silence" && "🔇 Silent"}
+                      {alert.type === "co-movement" && "👥 Co-movement"}
+                    </span>
+                  ))}
+              </div>
+            )}
+          </div>
+
+          {/* Assign button */}
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button
+                variant={assignment ? "outline" : "default"}
+                size="sm"
+                className="h-7 px-2.5 text-[11px] font-bold flex-shrink-0 rounded-lg"
+                style={
+                  !assignment
+                    ? {
+                        backgroundColor: "#c3f832",
+                        color: "#141414",
+                        border: "none",
+                      }
+                    : {}
+                }
+                onClick={() => {
+                  setSelectedWorker(workerId);
+                  setSelectedFence(assignment?.fenceId ?? "");
+                  setJobLabel(assignment?.jobLabel ?? "");
+                }}
+              >
+                {assignment ? "Edit" : "Assign"}
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="break-all text-sm">
+                  Assign: {workerId}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div>
+                  <Label className="text-xs">Task Area</Label>
+                  <Select
+                    value={selectedFence}
+                    onValueChange={setSelectedFence}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Choose a task area" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {fences.map((f) => (
+                        <SelectItem key={f.id} value={f.id}>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: f.color }}
+                            />
+                            {f.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Job Label</Label>
+                  <Input
+                    className="mt-1"
+                    placeholder="e.g., Crane Operator"
+                    value={jobLabel}
+                    onChange={(e) => setJobLabel(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleAssign}
+                    className="flex-1"
+                    style={{
+                      backgroundColor: "#c3f832",
+                      color: "#141414",
+                      border: "none",
+                    }}
+                  >
+                    Save
+                  </Button>
+                  {assignment && (
+                    <Button
+                      variant="destructive"
+                      onClick={() => onUnassignWorker(workerId)}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
     );
   };
 
-  const [onlineOpen, setOnlineOpen] = useState(true);
-  const [offlineOpen, setOfflineOpen] = useState(true);
-  const [deviceLogOpen, setDeviceLogOpen] = useState(true);
-
   return (
-    <div className="p-3 space-y-2 h-full flex flex-col">
-      {/* Online Workers Section */}
-      <Collapsible open={onlineOpen} onOpenChange={setOnlineOpen}>
-        <CollapsibleTrigger className="flex items-center gap-2 w-full py-2 px-1 rounded-md hover:bg-muted/50 transition-colors">
-          {onlineOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            Online Workers
-          </span>
-          <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-5">
-            {onlineWorkers.length}
-          </Badge>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="pl-6 pr-1 pb-2">
-            {onlineWorkers.length === 0 && !apiError && (
-              <p className="text-xs text-muted-foreground text-center py-3 bg-muted/30 rounded-lg">
-                No workers currently online
-              </p>
-            )}
-            {apiError && onlineWorkers.length === 0 && (
-              <div className="p-2.5 bg-destructive/10 rounded-lg text-xs">
-                <div className="flex items-center gap-2 text-destructive font-medium">
-                  <AlertCircle className="h-3 w-3" />
-                  API Connection Failed
-                </div>
-              </div>
-            )}
-            <div className="space-y-1.5">
-              {onlineWorkers.map(workerId => renderWorkerCard(workerId))}
-            </div>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
-
-      {showOfflineDevices && (
-        <Collapsible open={offlineOpen} onOpenChange={setOfflineOpen}>
-          <CollapsibleTrigger className="flex items-center gap-2 w-full py-2 px-1 rounded-md hover:bg-muted/50 transition-colors">
-            {offlineOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-            <div className="w-2 h-2 rounded-full bg-muted-foreground/50" />
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Offline Workers
-            </span>
-            <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-5">
-              {offlineWorkers.length}
-            </Badge>
+    <ScrollArea className="h-full">
+      <div className="flex flex-col">
+        {/* Online Workers */}
+        <Collapsible open={onlineOpen} onOpenChange={setOnlineOpen}>
+          <CollapsibleTrigger asChild>
+            <SectionHeader
+              open={onlineOpen}
+              onToggle={() => setOnlineOpen((o) => !o)}
+              dot={
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
+              }
+              label="Online"
+              count={onlineWorkers.length}
+              accent="bg-foreground text-background"
+            />
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div className="pl-6 pr-1 pb-2">
-              {offlineWorkers.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-3 bg-muted/30 rounded-lg">
-                  All workers are online
+            <div className="py-1.5">
+              {onlineWorkers.length === 0 && !apiError && (
+                <p className="text-xs text-muted-foreground text-center py-4 mx-2 bg-muted/20 rounded-lg">
+                  No workers currently online
                 </p>
               )}
-              <div className="space-y-1.5">
-                {offlineWorkers.map(workerId => renderWorkerCard(workerId))}
-              </div>
+              {apiError && onlineWorkers.length === 0 && (
+                <div className="mx-2 p-2.5 bg-destructive/8 rounded-lg text-xs flex items-center gap-2 text-destructive font-medium border border-destructive/15">
+                  <AlertCircle className="h-3 w-3 flex-shrink-0" /> API
+                  Connection Failed
+                </div>
+              )}
+              {onlineWorkers.map((id) => renderWorkerCard(id))}
             </div>
           </CollapsibleContent>
         </Collapsible>
-      )}
 
-      {/* Device Log Section */}
-      <Collapsible open={deviceLogOpen} onOpenChange={setDeviceLogOpen} className="flex-1 min-h-0 flex flex-col">
-        <CollapsibleTrigger className="flex items-center gap-2 w-full py-2 px-1 rounded-md hover:bg-muted/50 transition-colors">
-          {deviceLogOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-          <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            Device Log
-          </span>
-          <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-5">
-            {latestLocations.size}
-          </Badge>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="flex-1 min-h-0">
-          <ScrollArea className="h-full max-h-[40vh] pl-6 pr-1">
-            <div className="space-y-1.5 pb-2">
-              {latestLocations.size === 0 && !apiError && (
-                <p className="text-xs text-muted-foreground text-center py-3 bg-muted/30 rounded-lg">
-                  Waiting for device data...
-                </p>
+        {/* Offline Workers */}
+        {showOfflineDevices && (
+          <Collapsible open={offlineOpen} onOpenChange={setOfflineOpen}>
+            <CollapsibleTrigger asChild>
+              <SectionHeader
+                open={offlineOpen}
+                onToggle={() => setOfflineOpen((o) => !o)}
+                dot={
+                  <div className="w-2 h-2 rounded-full bg-muted-foreground/40 flex-shrink-0" />
+                }
+                label="Offline"
+                count={offlineWorkers.length}
+                accent="bg-muted text-muted-foreground"
+              />
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="py-1.5">
+                {offlineWorkers.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-4 mx-2 bg-muted/20 rounded-lg">
+                    All workers online
+                  </p>
+                ) : (
+                  offlineWorkers.map((id) => renderWorkerCard(id))
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+        {/* Device Log */}
+        <Collapsible open={deviceLogOpen} onOpenChange={setDeviceLogOpen}>
+          <CollapsibleTrigger asChild>
+            <SectionHeader
+              open={deviceLogOpen}
+              onToggle={() => setDeviceLogOpen((o) => !o)}
+              dot={
+                <Cpu className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+              }
+              label="Device Log"
+              count={latestLocations.size}
+              accent="bg-foreground text-background"
+            />
+          </CollapsibleTrigger>
+
+          <CollapsibleContent>
+            <div className="px-3 py-2 space-y-2">
+              {/* Empty state */}
+              {latestLocations.size === 0 && (
+                <div className="py-8 flex flex-col items-center gap-2 bg-muted/40 rounded-xl border border-dashed border-border">
+                  <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center">
+                    <Cpu className="h-5 w-5 text-muted-foreground/40" />
+                  </div>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {apiError
+                      ? "Connect to your backend"
+                      : "Waiting for device data…"}
+                  </p>
+                </div>
               )}
-              {apiError && latestLocations.size === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-3 bg-muted/30 rounded-lg">
-                  Connect to your PHP backend
-                </p>
-              )}
-              {Array.from(latestLocations.entries()).map(([deviceId, location]) => {
-                const online = isDeviceOnline(location);
-                return (
-                  <div 
-                    key={deviceId} 
-                    className="flex items-start gap-3 p-2.5 rounded-lg bg-muted/30 border border-border/30 cursor-pointer hover:bg-muted/50 hover:border-primary/30 transition-colors"
-                    onClick={() => setSelectedDeviceHistory(deviceId)}
-                  >
-                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      online ? 'bg-green-500/15' : 'bg-muted'
-                    }`}>
-                      <Cpu className={`h-4 w-4 ${online ? 'text-green-600' : 'text-muted-foreground'}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-sm truncate">{deviceId}</span>
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 flex-shrink-0">
-                          ESP32
-                        </Badge>
+
+              {Array.from(latestLocations.entries()).map(
+                ([deviceId, location]) => {
+                  const online = isDeviceOnline(location);
+                  const alertCount = getAlertCount(deviceId);
+                  return (
+                    <div
+                      key={deviceId}
+                      className="flex items-start gap-2.5 p-2.5 rounded-xl border border-border bg-card cursor-pointer transition-all duration-150 hover:shadow-md hover:-translate-y-px"
+                      onClick={() => setSelectedDeviceHistory(deviceId)}
+                      style={{
+                        boxShadow: online
+                          ? "inset 3px 0 0 #c3f832, 0 1px 4px hsl(0 0% 0% / 0.05)"
+                          : "inset 3px 0 0 hsl(var(--border)), 0 1px 4px hsl(0 0% 0% / 0.05)",
+                      }}
+                    >
+                      {/* Initials avatar */}
+                      <div
+                        className="h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 relative font-bold text-[12px] select-none"
+                        style={{
+                          backgroundColor: online
+                            ? "#c3f83225"
+                            : "hsl(var(--muted))",
+                          border: online
+                            ? "1.5px solid #c3f832"
+                            : "1.5px solid hsl(var(--border))",
+                          color: online
+                            ? "#5a7a00"
+                            : "hsl(var(--muted-foreground))",
+                          opacity: online ? 1 : 0.6,
+                        }}
+                      >
+                        {deviceId
+                          .replace(/[^a-zA-Z0-9]/g, "")
+                          .slice(0, 2)
+                          .toUpperCase()}
+                        {online && (
+                          <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-card animate-pulse" />
+                        )}
+                        {alertCount > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black rounded-full min-w-[14px] h-3.5 flex items-center justify-center px-0.5 ring-1 ring-card">
+                            {alertCount}
+                          </span>
+                        )}
                       </div>
-                      <div className="mt-1 space-y-0.5 text-[10px] text-muted-foreground">
-                        <div className="flex items-center gap-1.5">
-                          <Navigation className="h-2.5 w-2.5 flex-shrink-0" />
-                          <span className="font-mono truncate">
-                            {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="font-bold text-[13px] break-all leading-tight">
+                            {deviceId}
+                          </span>
+                          <span
+                            className="text-[9px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0"
+                            style={{
+                              backgroundColor: "#c3f83230",
+                              color: "#5a7a00",
+                            }}
+                          >
+                            ESP32
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <Clock className="h-2.5 w-2.5 flex-shrink-0" />
-                          <span>{formatTimestamp(location.timestamp)}</span>
+
+                        <div className="mt-1.5 space-y-0.5 text-[10px] text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Navigation className="h-2.5 w-2.5 flex-shrink-0" />
+                            <span className="font-mono">
+                              {location.latitude.toFixed(5)},{" "}
+                              {location.longitude.toFixed(5)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-2.5 w-2.5 flex-shrink-0" />
+                            <span>{formatTs(location.timestamp)}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                },
+              )}
             </div>
-          </ScrollArea>
-        </CollapsibleContent>
-      </Collapsible>
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
 
       {/* Device History Dialog */}
       {selectedDeviceHistory && (
@@ -585,6 +792,6 @@ export const WorkerPanel = ({
           onClose={() => setSelectedDeviceHistory(null)}
         />
       )}
-    </div>
+    </ScrollArea>
   );
 };

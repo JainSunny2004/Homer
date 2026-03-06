@@ -9,7 +9,7 @@ export interface GPSLocation {
   locationSource?: string;
   peerDistance?: number;
   pairId?: number;
-  // NEW: Cooperative transmission fields
+  // Cooperative transmission
   ownLat?: number;
   ownLon?: number;
   ownGpsValid?: boolean;
@@ -18,6 +18,9 @@ export interface GPSLocation {
   peerDist?: number;
   peerId?: number;
   peerValid?: boolean;
+  // Sprint 1
+  battery?: number;
+  impact?: boolean;
 }
 
 export interface Geofence {
@@ -35,6 +38,8 @@ export interface PolygonFence {
   color: string;
   shiftStart: string;
   shiftEnd: string;
+  toleranceMeters?: number; // ← ADD
+  isGreenCorridor?: boolean; // ← ADD
 }
 
 export interface WorkerAssignment {

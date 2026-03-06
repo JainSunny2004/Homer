@@ -2,57 +2,97 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
-    /* Warm Earthy Theme - #84994F, #FFE797, #FCB53B, #A72703 */
-    --background: 46 60% 94%;
-    --foreground: 13 70% 18%;
+    --background: 0 0% 96%; /* #f5f5f5 slightly warmer off-white */
+    --foreground: 0 0% 8%; /* #141414 near-black */
 
-    --card: 46 50% 98%;
-    --card-foreground: 13 70% 18%;
+    --card: 0 0% 100%; /* pure white cards */
+    --card-foreground: 0 0% 8%;
 
-    --popover: 46 50% 98%;
-    --popover-foreground: 13 70% 18%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 8%;
 
-    --primary: 82 32% 45%;
-    --primary-foreground: 46 60% 98%;
+    --primary: 76 95% 45%; /* #c3f832 lime */
+    --primary-foreground: 0 0% 8%;
 
-    --secondary: 46 100% 80%;
-    --secondary-foreground: 13 70% 18%;
+    --secondary: 0 0% 92%;
+    --secondary-foreground: 0 0% 12%;
 
-    --muted: 46 40% 90%;
-    --muted-foreground: 82 20% 35%;
+    --muted: 0 0% 94%;
+    --muted-foreground: 0 0% 38%; /* readable grey */
 
-    --accent: 37 97% 61%;
-    --accent-foreground: 13 70% 18%;
+    --accent: 76 95% 45%;
+    --accent-foreground: 0 0% 8%;
 
-    --destructive: 13 96% 33%;
-    --destructive-foreground: 46 60% 98%;
+    --destructive: 0 84% 55%;
+    --destructive-foreground: 0 0% 98%;
 
-    --success: 82 32% 45%;
-    --success-foreground: 46 60% 98%;
+    --success: 142 65% 38%;
+    --success-foreground: 0 0% 98%;
 
-    --warning: 37 97% 61%;
-    --warning-foreground: 13 70% 18%;
+    --warning: 38 92% 45%;
+    --warning-foreground: 0 0% 8%;
 
-    --border: 82 20% 75%;
-    --input: 46 40% 92%;
-    --ring: 82 32% 45%;
+    --border: 0 0% 78%; /* clearly visible borders */
+    --input: 0 0% 92%;
+    --ring: 76 95% 45%;
+    --radius: 0.625rem;
 
-    --radius: 0.5rem;
+    /* Sidebar stays white — matches inspo content panel */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 8%;
+    --sidebar-primary: 76 95% 45%;
+    --sidebar-primary-foreground: 0 0% 8%;
+    --sidebar-accent: 0 0% 96%;
+    --sidebar-accent-foreground: 0 0% 8%;
+    --sidebar-border: 0 0% 78%;
+    --sidebar-ring: 76 95% 45%;
+  }
 
-    --sidebar-background: 82 25% 30%;
-    --sidebar-foreground: 46 60% 95%;
-    --sidebar-primary: 37 97% 61%;
-    --sidebar-primary-foreground: 13 70% 18%;
-    --sidebar-accent: 82 20% 38%;
-    --sidebar-accent-foreground: 46 60% 95%;
-    --sidebar-border: 82 20% 25%;
-    --sidebar-ring: 37 97% 61%;
+  .dark {
+    --background: 0 0% 9%;
+    --foreground: 0 0% 95%;
+
+    --card: 0 0% 13%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 0 0% 13%;
+    --popover-foreground: 0 0% 95%;
+
+    --primary: 76 95% 55%;
+    --primary-foreground: 0 0% 8%;
+
+    --secondary: 0 0% 18%;
+    --secondary-foreground: 0 0% 92%;
+
+    --muted: 0 0% 16%;
+    --muted-foreground: 0 0% 62%;
+
+    --accent: 76 95% 55%;
+    --accent-foreground: 0 0% 8%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 98%;
+
+    --success: 142 65% 45%;
+    --success-foreground: 0 0% 98%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 8%;
+
+    --border: 0 0% 26%;
+    --input: 0 0% 18%;
+    --ring: 76 95% 55%;
+
+    --sidebar-background: 0 0% 11%;
+    --sidebar-foreground: 0 0% 92%;
+    --sidebar-primary: 76 95% 55%;
+    --sidebar-primary-foreground: 0 0% 8%;
+    --sidebar-accent: 0 0% 16%;
+    --sidebar-accent-foreground: 0 0% 92%;
+    --sidebar-border: 0 0% 22%;
+    --sidebar-ring: 76 95% 55%;
   }
 }
 
@@ -61,21 +101,143 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    font-size: 15px;
+  }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    line-height: 1.6;
+    letter-spacing: -0.01em;
   }
+}
+
+/* ── Scrollbars ── */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.4);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+/* ── Resize handle ── */
+.resize-handle {
+  position: relative;
+  width: 5px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  transition: background 0.15s;
+  z-index: 10;
+}
+.resize-handle::after {
+  content: "";
+  width: 2px;
+  height: 24px;
+  border-radius: 2px;
+  background: hsl(var(--border));
+  transition: all 0.15s;
+}
+.resize-handle:hover::after,
+.resize-handle.resizing::after {
+  width: 3px;
+  height: 40px;
+  background: hsl(var(--primary) / 0.8);
 }
 
 @layer utilities {
   .glass {
     @apply bg-card/80 backdrop-blur-md border border-border/50;
   }
-  
   .glow-primary {
-    box-shadow: 0 0 20px hsl(var(--primary) / 0.3);
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.35);
   }
-  
   .text-gradient {
     @apply bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent;
   }
+  .panel-shadow {
+    box-shadow: 2px 0 16px hsl(0 0% 0% / 0.07);
+  }
+  .panel-shadow-l {
+    box-shadow: -2px 0 16px hsl(0 0% 0% / 0.07);
+  }
+  .section-card {
+    @apply rounded-xl border border-border bg-card p-3 shadow-sm;
+  }
+  .card-hover {
+    @apply hover:shadow-md hover:border-border transition-all duration-150;
+  }
+
+  /* Inspo-style lime status badge */
+  .badge-lime {
+    background-color: #c3f832;
+    color: #141414;
+    @apply text-[10px] font-bold px-2.5 py-0.5 rounded-full;
+  }
+
+  /* Inspo-style dark pill badge (like "On the way" active tab) */
+  .badge-dark {
+    background-color: #292928;
+    color: #ffffff;
+    @apply text-[10px] font-bold px-2.5 py-0.5 rounded-full;
+  }
+}
+
+/* ── Smooth collapsible expand/collapse ── */
+[data-radix-collapsible-content] {
+  overflow: hidden;
+}
+[data-radix-collapsible-content][data-state="open"] {
+  animation: collapsible-open 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-radix-collapsible-content][data-state="closed"] {
+  animation: collapsible-close 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes collapsible-open {
+  from {
+    height: 0;
+    opacity: 0.6;
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+}
+@keyframes collapsible-close {
+  from {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+/* ── Card lift on hover ── */
+.card-hover {
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+.card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px hsl(0 0% 0% / 0.08);
 }

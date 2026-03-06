@@ -11,51 +11,55 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const MANAGER_ROLES = ['admin', 'manager', 'supervisor'];
+
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuth();
-  
-  if (isLoading) {
-    return <div className="h-screen flex items-center justify-center">Loading...</div>;
-  }
-  
-  if (!user) {
-    return <Navigate to="/" replace />;
-  }
-  
+  if (isLoading) return <div className="h-screen flex items-center justify-center text-sm text-muted-foreground">Loading…</div>;
+  if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
 };
 
-const DashboardRouter = () => {
-  const { user } = useAuth();
-  
-  if (user?.role === 'manager') {
-    return <ManagerDashboard />;
-  }
-  return <WorkerDashboard />;
+// Redirects to the correct dashboard based on role after login
+const RootRedirect = () => {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  return <Navigate to={MANAGER_ROLES.includes(user.role) ? '/dashboard' : '/worker-dashboard'} replace />;
 };
+
+const AppRoutes = () => (
+  <Routes>
+    <Route path="/login" element={<Login />} />
+
+    <Route path="/dashboard" element={
+      <ProtectedRoute>
+        <ManagerDashboard />
+      </ProtectedRoute>
+    } />
+
+    <Route path="/worker-dashboard" element={
+      <ProtectedRoute>
+        <WorkerDashboard />
+      </ProtectedRoute>
+    } />
+
+    <Route path="/" element={<RootRedirect />} />
+    <Route path="*" element={<NotFound />} />
+  </Routes>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Login />} />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <DashboardRouter />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </BrowserRouter>
+    </TooltipProvider>
   </QueryClientProvider>
 );
 

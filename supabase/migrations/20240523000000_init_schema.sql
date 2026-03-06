@@ -12,6 +12,8 @@ ADD COLUMN IF NOT EXISTS peer_lon FLOAT DEFAULT 0,
 ADD COLUMN IF NOT EXISTS peer_dist FLOAT DEFAULT 0,
 ADD COLUMN IF NOT EXISTS peer_id INT DEFAULT 0,
 ADD COLUMN IF NOT EXISTS peer_valid BOOLEAN DEFAULT false;
+ADD COLUMN IF NOT EXISTS battery  INT     DEFAULT 0,
+ADD COLUMN IF NOT EXISTS impact   BOOLEAN DEFAULT false;
 
 -- Add comment to document the new fields
 COMMENT ON COLUMN public.sensor_readings.own_lat IS 'Device own GPS latitude';
@@ -22,10 +24,12 @@ COMMENT ON COLUMN public.sensor_readings.peer_lon IS 'Peer device GPS longitude 
 COMMENT ON COLUMN public.sensor_readings.peer_dist IS 'Distance to peer device in meters';
 COMMENT ON COLUMN public.sensor_readings.peer_id IS 'ID of the peer device';
 COMMENT ON COLUMN public.sensor_readings.peer_valid IS 'True if peer data is available';
+COMMENT ON COLUMN public.sensor_readings.battery IS 'Battery percentage 0–100';
+COMMENT ON COLUMN public.sensor_readings.impact  IS 'True if high-velocity impact detected this cycle';
 
 -- Recreate the view to include new fields
 CREATE OR REPLACE VIEW public.latest_device_locations AS
-SELECT DISTINCT ON (device_id) 
+SELECT DISTINCT ON (device_id)
   id,
   device_id,
   latitude,
@@ -44,6 +48,8 @@ SELECT DISTINCT ON (device_id)
   src,
   p_dist,
   pair_id,
+  battery,
+  impact,
   created_at
 FROM public.sensor_readings
 ORDER BY device_id, created_at DESC;

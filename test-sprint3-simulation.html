@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>ST-Homer Sprint 3 Simulation</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Courier New', monospace; background: #0f172a; color: #94a3b8; padding: 24px; }
+    h1   { color: #e2e8f0; font-size: 1rem; margin-bottom: 16px; }
+    #log { font-size: 0.78rem; line-height: 1.9; white-space: pre-wrap; }
+    .ok  { color: #22c55e; }
+    .err { color: #ef4444; }
+    .warn{ color: #f59e0b; }
+    .hdr { color: #818cf8; font-weight: bold; }
+    #btn { margin-bottom: 16px; padding: 10px 24px; background: #6366f1; color: #fff;
+           border: none; border-radius: 8px; font-size: 0.9rem; cursor: pointer; }
+    #btn:disabled { background: #334155; cursor: not-allowed; }
+    #progress { color: #64748b; font-size: 0.78rem; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <h1>🏗️ ST-Homer Sprint 1–3 Simulation</h1>
+  <button id="btn" onclick="runAll()">▶ Run All 13 Scenarios</button>
+  <div id="progress"></div>
+  <div id="log"></div>
+
+<script>
+const SUPABASE_URL = 'https://tmfzkyohyrcnujeipvds.supabase.co/functions/v1/ingest-data';
+const AUTH_KEY     = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZnpreW9oeXJjbnVqZWlwdmRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNTU4MjcsImV4cCI6MjA4NjczMTgyN30.-0ZoLx8KuaOnOErljEUv4MvnbY6Wb7wWYwDVBrT0GYA';
+
+const DEVICES      = [
+  { id: 'Demo_Tracker_01', label: 'Demo Worker A' },
+  { id: 'Demo_Tracker_02', label: 'Demo Worker B' },
+  { id: 'Demo_Tracker_03', label: 'Demo Worker C' },
+];
+
+const INSIDE_ZONE  = { lat: 28.5450, lon: 77.1925 };
+const OUTSIDE_ZONE = { lat: 28.5510, lon: 77.2010 };
+const EDGE_ZONE    = { lat: 28.5439, lon: 77.1925 };
+const YARD_FAR     = { lat: 28.5600, lon: 77.2100 };
+const STATIC_AX = 100, STATIC_AY = 50, STATIC_AZ = 200;
+
+const KEYS = {
+  fences:      'polygon-fences',
+  assignments: 'worker-assignments',
+  settings:    'manager-settings',
+};
+
+const TEST_FENCE = {
+  id: 'test-fence-sprint3', name: 'Sprint3 Test Zone',
+  coordinates: [
+    { lat: 28.5440, lng: 77.1910 }, { lat: 28.5460, lng: 77.1910 },
+    { lat: 28.5460, lng: 77.1940 }, { lat: 28.5440, lng: 77.1940 },
+  ],
+  color: '#22c55e', shiftStart: '00:00', shiftEnd: '23:59',
+  toleranceMeters: 20, isGreenCorridor: false,
+};
+
+const GREEN_CORRIDOR = {
+  id: 'test-corridor-sprint3', name: 'Sprint3 Green Corridor',
+  coordinates: [
+    { lat: 28.5500, lng: 77.2000 }, { lat: 28.5520, lng: 77.2000 },
+    { lat: 28.5520, lng: 77.2020 }, { lat: 28.5500, lng: 77.2020 },
+  ],
+  color: '#86efac', shiftStart: '00:00', shiftEnd: '23:59',
+  toleranceMeters: 5, isGreenCorridor: true,
+};
+
+const TEST_ASSIGNMENTS = DEVICES.map((d, i) => ({
+  id: `test-assignment-0${i+1}`, workerId: d.id,
+  fenceId: TEST_FENCE.id, jobLabel: d.label,
+}));
+
+const TEST_SETTINGS = {
+  deviceTimeoutSeconds: 60, outOfZoneAlertDelaySeconds: 10,
+  breakDurationValue: 15, breakDurationUnit: 'minutes', breakStartTime: '13:00',
+  inactivityThresholdMinutes: 5, inactivityBreakExtendMinutes: 15,
+  silenceAlertMinutes: 5, coMovementThresholdMeters: 10, coMovementDurationSeconds: 30,
+  shiftChangeTime: '02:00', shiftChangeWindowMinutes: 5,
+  autoRefreshIntervalSeconds: 3, defaultMapZoom: 16, showOfflineDevices: true,
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const logEl  = document.getElementById('log');
+const progEl = document.getElementById('progress');
+
+function log(msg, cls = '') {
+  const span = document.createElement('span');
+  if (cls) span.className = cls;
+  span.textContent = msg + '\n';
+  logEl.appendChild(span);
+  window.scrollTo(0, document.body.scrollHeight);
+}
+
+function hdr(msg)  { log(msg, 'hdr'); }
+function ok(msg)   { log(msg, 'ok'); }
+function err(msg)  { log(msg, 'err'); }
+function warn(msg) { log(msg, 'warn'); }
+function div(c='─', n=62) { log(c.repeat(n)); }
+
+function setProgress(msg) { progEl.textContent = msg; }
+function rnd(a, b) { return +(Math.random() * (b - a) + a).toFixed(3); }
+function accel()   { return { ax: rnd(-0.5,0.5), ay: rnd(-0.5,0.5), az: rnd(9.6,10.0) }; }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function send(deviceId, params, tag) {
+  const qs = Object.entries({ device_id: deviceId, ...params })
+    .map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+  try {
+    const res  = await fetch(`${SUPABASE_URL}?${qs}`, { headers: { Authorization: AUTH_KEY } });
+    const icon = res.status === 200 ? '✅' : `⚠️  HTTP ${res.status}`;
+    log(`  ${icon}  ${deviceId.padEnd(22)} │ ${tag}`);
+    return res.status === 200;
+  } catch (e) {
+    log(`  ❌  ${deviceId.padEnd(22)} │ ${tag} — ${e.message}`, 'err');
+    return false;
+  }
+}
+
+// ── Seed localStorage ─────────────────────────────────────────────────────────
+function seedLocalStorage() {
+  localStorage.setItem(KEYS.fences,      JSON.stringify([TEST_FENCE, GREEN_CORRIDOR]));
+  localStorage.setItem(KEYS.assignments, JSON.stringify(TEST_ASSIGNMENTS));
+  localStorage.setItem(KEYS.settings,    JSON.stringify(TEST_SETTINGS));
+  ok('  ✅ localStorage seeded — 2 fences, 3 assignments, settings applied');
+}
+
+// ── Scenarios ─────────────────────────────────────────────────────────────────
+async function scenario1() {
+  hdr('\n🟢 SCENARIO 1 — Normal Operation'); div();
+  for (const dev of DEVICES) {
+    const a = accel();
+    await send(dev.id, { lat: INSIDE_ZONE.lat, lon: INSIDE_ZONE.lon, ax: a.ax, ay: a.ay, az: a.az, gx:0,gy:0,gz:0, src:'GPS', battery:85, impact:0, p_dist:0, Pair_id:0 }, '🏠 Inside zone | GPS | 85% battery');
+    await sleep(400);
+  }
+  warn('  👁️  Dashboard: All 3 pins inside green fence.');
+}
+
+async function scenario2() {
+  hdr('\n🔴 SCENARIO 2 — Out-of-Zone Alert'); div();
+  const a = accel();
+  const base = { lat: OUTSIDE_ZONE.lat, lon: OUTSIDE_ZONE.lon, ax: a.ax, ay: a.ay, az: a.az, gx:0,gy:0,gz:0, src:'GPS', battery:80, impact:0, p_dist:0, Pair_id:0 };
+  await send('Demo_Tracker_01', base, '🚫 Outside zone — run 1');
+  log('  ⏳ Waiting 12s for out-of-zone delay...', 'warn');
+  for (let i = 12; i > 0; i--) { setProgress(`⏳ Scenario 2 — waiting ${i}s...`); await sleep(1000); }
+  await send('Demo_Tracker_01', { ...base }, '🚫 Outside zone — run 2 (alert fires)');
+  for (const id of ['Demo_Tracker_02','Demo_Tracker_03']) {
+    const b = accel();
+    await send(id, { lat: INSIDE_ZONE.lat, lon: INSIDE_ZONE.lon, ax: b.ax, ay: b.ay, az: b.az, gx:0,gy:0,gz:0, src:'GPS', battery:82, impact:0, p_dist:0, Pair_id:0 }, '🏠 Inside zone | baseline');
+    await sleep(300);
+  }
+  warn('  👁️  Dashboard: 🔔 Bell = 1. AlertsPanel: amber "Out of Zone: Demo_Tracker_01".');
+}
+
+async function scenario3() {
+  hdr('\n🟡 SCENARIO 3 — Tolerance Edge Case'); div();
+  const a = accel();
+  await send('Demo_Tracker_01', { lat: EDGE_ZONE.lat, lon: EDGE_ZONE.lon, ax: a.ax, ay: a.ay, az: a.az, gx:0,gy:0,gz:0, src:'GPS', battery:78, impact:0, p_dist:0, Pair_id:0 }, '🟡 Edge of fence (within ±20m)');
+  warn('  👁️  Dashboard: No new alert. Bell unchanged.');
+}
+
+async function scenario4() {
+  hdr('\n🟩 SCENARIO 4 — Green Corridor Suppression'); div();
+  const a = accel();
+  await send('Demo_Tracker_01', { lat: 28.5510, lon: 77.2010, ax: a.ax, ay: a.ay, az: a.az, gx:0,gy:0,gz:0, src:'GPS', battery:76, impact:0, p_dist:0, Pair_id:0 }, '🟩 Inside green corridor — suppressed');
+  warn('  👁️  Dashboard: No new out-of-zone alert.');
+}
+
+async function scenario5() {
+  hdr('\n🔋 SCENARIO 5 — Low Battery'); div();
+  const a = accel();
+  await send('Demo_Tracker_02', { lat: INSIDE_ZONE.lat, lon: INSIDE_ZONE.lon, ax: a.ax, ay: a.ay, az: a.az, gx:0,gy:0,gz:0, src:'GPS', battery:12, impact:0, p_dist:0, Pair_id:0 }, '🔋 LOW battery 12%');
+  warn('  👁️  Dashboard: Demo_Tracker_02 → red battery badge.');
+}
+
+async function scenario6() {
+  hdr('\n💥 SCENARIO 6 — Impact Detected'); div();
+  await send('Demo_Tracker_03', { lat: INSIDE_ZONE.lat, lon: INSIDE_ZONE.lon, ax:0.9, ay:0.8, az:15.2, gx:0,gy:0,gz:0, src:'GPS', battery:70, impact:1, p_dist:0, Pair_id:0 }, '💥 IMPACT flag | az=15.2');
+  warn('  👁️  Dashboard: Demo_Tracker_03 → impact indicator.');
+}
+
+async function scenario7() {
+  hdr('\n😴 SCENARIO 7 — Inactivity Detection'); div();
+  const base = { lat: INSIDE_ZONE.lat, lon: INSIDE_ZONE.lon, ax: STATIC_AX, ay: STATIC_AY, az: STATIC_AZ, gx:0,gy:0,gz:0, src:'GPS', battery:75, impact:0, p_dist:0, Pair_id:0 };
+  for (let i = 1; i <= 4; i++) {
+    await send('Demo_Tracker_01', { ...base }, `😴 Static accel — run ${i}`);
+    await sleep(2000);
+  }
+  warn('  👁️  Dashboard: 🔔 Bell += 1. Orange "Inactivity: Demo_Tracker_01".');
+}
+
+async function scenario8() {
+  hdr('\n🏃 SCENARIO 8 — Inactivity Resolved'); div();
+  await send('Demo_Tracker_01', { lat: INSIDE_ZONE.lat, lon: INSIDE_ZONE.lon, ax:850, ay:720, az:910, gx:8,gy:5,gz:3, src:'GPS', battery:74, impact:0, p_dist:0, Pair_id:0 }, '🏃 Large accel delta — motion detected');
+  warn('  👁️  Dashboard: Inactivity card disappears. Bell -= 1.');
+}
+
+async function scenario9() {
+  hdr('\n👥 SCENARIO 9 — Co-movement Detection'); div();
+  const loc = { lat: INSIDE_ZONE.lat, lon: INSIDE_ZONE.lon, gx:0,gy:0,gz:0, src:'GPS', battery:80, impact:0, p_dist:2.8, Pair_id:1 };
+  let a1 = accel(), a2 = accel();
+  await send('Demo_Tracker_01', { ...loc, ax: a1.ax, ay: a1.ay, az: a1.az }, '👥 Co-located — run 1 (pair init)');
+  await sleep(400);
+  await send('Demo_Tracker_02', { ...loc, ax: a2.ax, ay: a2.ay, az: a2.az }, '👥 Co-located — run 1 (pair init)');
+  log('  ⏳ Waiting 32s for co-movement threshold...', 'warn');
+  for (let i = 32; i > 0; i--) { setProgress(`⏳ Scenario 9 — waiting ${i}s...`); await sleep(1000); }
+  let b1 = accel(), b2 = accel();
+  await send('Demo_Tracker_01', { ...loc, ax: b1.ax, ay: b1.ay, az: b1.az }, '👥 Co-located — run 2 (alert fires)');
+  await sleep(400);
+  await send('Demo_Tracker_02', { ...loc, ax: b2.ax, ay: b2.ay, az: b2.az }, '👥 Co-located — run 2 (alert fires)');
+  warn('  👁️  Dashboard: 🔔 Bell += 1. Blue "Co-movement: Demo_Tracker_01 & 02".');
+}
+
+async function scenario10() {
+  hdr('\n📲 SCENARIO 10 — BLE Peer Fallback'); div();
+  await send('Demo_Tracker_03', { lat: INSIDE_ZONE.lat, lon: INSIDE_ZONE.lon, ax:0.1, ay:0.2, az:9.8, gx:0,gy:0,gz:0, src:'PEER', battery:65, impact:0, p_dist:12.4, Pair_id:1 }, '📲 src=PEER | BLE fallback');
+  warn('  👁️  Dashboard: Demo_Tracker_03 → 🔵 BLE badge.');
+}
+
+async function scenario11() {
+  hdr('\n🔇 SCENARIO 11 — Silence Alert Preview'); div();
+  const a = accel();
+  await send('Demo_Tracker_02', { lat: INSIDE_ZONE.lat, lon: INSIDE_ZONE.lon, ax: a.ax, ay: a.ay, az: a.az, gx:0,gy:0,gz:0, src:'GPS', battery:60, impact:0, p_dist:0, Pair_id:0 }, '🔇 Final ping for Demo_Tracker_02');
+  warn('  👁️  Dashboard: Wait 5 min → red "Tracker Silent: Demo_Tracker_02".');
+}
+
+async function scenario12() {
+  hdr('\n🏗️  SCENARIO 12 — Yard Boundary Exit'); div();
+  await send('Demo_Tracker_01', { lat: YARD_FAR.lat, lon: YARD_FAR.lon, ax:0.3, ay:0.1, az:9.8, gx:0,gy:0,gz:0, src:'GPS', battery:72, impact:0, p_dist:0, Pair_id:0 }, '🏗️  Outside yard boundary');
+  warn('  👁️  Dashboard: Demo_Tracker_01 pin far outside site.');
+}
+
+async function scenario13() {
+  hdr('\n✅ SCENARIO 13 — Full Recovery'); div();
+  for (const dev of DEVICES) {
+    const a = accel();
+    await send(dev.id, { lat: INSIDE_ZONE.lat, lon: INSIDE_ZONE.lon, ax: a.ax, ay: a.ay, az: a.az, gx:0,gy:0,gz:0, src:'GPS', battery:90, impact:0, p_dist:0, Pair_id:0 }, '✅ Inside zone | 90% battery | clean');
+    await sleep(400);
+  }
+  warn('  👁️  Dashboard: All 3 pins inside fence. Co-movement clears.');
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────────
+async function runAll() {
+  document.getElementById('btn').disabled = true;
+  logEl.innerHTML = '';
+
+  div('═');
+  hdr('  ST-Homer Sprint 1–3 — Full Simulation');
+  hdr('  Seeding localStorage + running 13 scenarios');
+  div('═');
+
+  // Seed
+  seedLocalStorage();
+  log('\n  ℹ️  Reload your dashboard tab now to pick up seeded data, then scenarios will run.\n', 'warn');
+  await sleep(3000);
+
+  // Warm up
+  log('\n  🔥 Warming up edge function...', 'warn');
+  for (let i = 1; i <= 3; i++) {
+    const ok2 = await send('warmup', { lat:0,lon:0,ax:0,ay:0,az:0,gx:0,gy:0,gz:0,src:'GPS',battery:0,impact:0,p_dist:0,Pair_id:0 }, `🔥 Warm-up ${i}/3`);
+    if (ok2) { ok('  ✅ Edge function warm!\n'); break; }
+    await sleep(2000);
+  }
+
+  setProgress('🟢 Running scenarios...');
+
+  await scenario1();  setProgress('1/13 done'); await sleep(3000);
+  await scenario2();  setProgress('2/13 done'); await sleep(3000);
+  await scenario3();  setProgress('3/13 done'); await sleep(2000);
+  await scenario4();  setProgress('4/13 done'); await sleep(2000);
+  await scenario5();  setProgress('5/13 done'); await sleep(2000);
+  await scenario6();  setProgress('6/13 done'); await sleep(2000);
+  await scenario7();  setProgress('7/13 done'); await sleep(3000);
+  await scenario8();  setProgress('8/13 done'); await sleep(2000);
+  await scenario9();  setProgress('9/13 done'); await sleep(3000);
+  await scenario10(); setProgress('10/13 done'); await sleep(2000);
+  await scenario11(); setProgress('11/13 done'); await sleep(2000);
+  await scenario12(); setProgress('12/13 done'); await sleep(2000);
+  await scenario13(); setProgress('✅ All 13 done!');
+
+  div('═');
+  ok('\n🎉 All 13 scenarios complete!\n');
+  log('📋 Final state:\n   🔔 Bell: out-of-zone + co-movement alerts active\n   🟠 Silence fires 5min after Scenario 11\n   🗺️  All 3 pins back inside fence\n', 'warn');
+  div('═');
+
+  document.getElementById('btn').disabled = false;
+  document.getElementById('btn').textContent = '↺ Run Again';
+}
+</script>
+</body>
+</html>
