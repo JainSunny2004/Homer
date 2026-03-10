@@ -26,15 +26,20 @@ interface ManagerMapProps {
   deviceTimeoutSeconds?: number;
 }
 
-const containerStyle = {
-  width: "100%",
-  height: "100%",
-};
+const containerStyle = { width: "100%", height: "100%" };
 
 const PIN_PATH =
   "M12 0C7.31 0 3.5 3.81 3.5 8.5C3.5 14.88 12 24 12 24S20.5 14.88 20.5 8.5C20.5 3.81 16.69 0 12 0ZM12 11.5C10.34 11.5 9 10.16 9 8.5C9 6.84 10.34 5.5 12 5.5C13.66 5.5 15 6.84 15 8.5C15 10.16 13.66 11.5 12 11.5Z";
 
 const libraries: "drawing"[] = ["drawing"];
+
+// ✅ Helper: true only if the location has a real GPS/PEER coordinate
+const hasValidLocation = (loc: GPSLocation): boolean => {
+  if (!loc) return false;
+  if (loc.locationSource === "NONE") return false;
+  if (loc.latitude === 0 && loc.longitude === 0) return false;
+  return true;
+};
 
 export const ManagerMap = ({
   locations,
@@ -51,7 +56,7 @@ export const ManagerMap = ({
     position: google.maps.LatLngLiteral;
     deviceId: string;
     location: GPSLocation;
-    status: "compliant" | "violation" | "unassigned";
+    status: "compliant" | "violation" | "unassigned" | "no-signal";
   } | null>(null);
 
   const { isLoaded, loadError } = useJsApiLoader({
@@ -83,7 +88,10 @@ export const ManagerMap = ({
   const getWorkerStatus = (
     deviceId: string,
     location: GPSLocation,
-  ): "compliant" | "violation" | "unassigned" => {
+  ): "compliant" | "violation" | "unassigned" | "no-signal" => {
+    // ✅ FIX Bug 3: Don't evaluate zone status when no valid GPS fix
+    if (!hasValidLocation(location)) return "no-signal";
+
     const assignment = assignments.find((a) => a.workerId === deviceId);
     if (!assignment) return "unassigned";
 
@@ -97,13 +105,14 @@ export const ManagerMap = ({
       fence.coordinates,
     );
 
-    if (withinShift && insideFence) {
-      return "compliant";
-    }
+    if (withinShift && insideFence) return "compliant";
     return "violation";
   };
 
-  const getMarkerColor = (deviceId: string): string => {
+  const getMarkerColor = (deviceId: string, location: GPSLocation): string => {
+    // ✅ Grey out marker if no valid location
+    if (!hasValidLocation(location)) return "#64748b";
+
     const assignment = assignments.find((a) => a.workerId === deviceId);
     if (!assignment) return "#94a3b8";
 
@@ -112,35 +121,26 @@ export const ManagerMap = ({
   };
 
   const getStatusLabel = (
-    status: "compliant" | "violation" | "unassigned",
+    status: "compliant" | "violation" | "unassigned" | "no-signal",
   ): string => {
     switch (status) {
-      case "compliant":
-        return "Inside Task Area";
-      case "violation":
-        return "Violation";
-      case "unassigned":
-        return "Unassigned";
+      case "compliant":   return "Inside Task Area";
+      case "violation":   return "Violation";
+      case "unassigned":  return "Unassigned";
+      case "no-signal":   return "No Signal";
     }
   };
 
-  const onLoad = useCallback((map: google.maps.Map) => {
-    setMap(map);
-  }, []);
-
-  const onUnmount = useCallback(() => {
-    setMap(null);
-  }, []);
+  const onLoad = useCallback((map: google.maps.Map) => { setMap(map); }, []);
+  const onUnmount = useCallback(() => { setMap(null); }, []);
 
   const onPolygonComplete = (polygon: google.maps.Polygon) => {
     const path = polygon.getPath();
     const coords: { lat: number; lng: number }[] = [];
-
     for (let i = 0; i < path.getLength(); i++) {
       const point = path.getAt(i);
       coords.push({ lat: point.lat(), lng: point.lng() });
     }
-
     polygon.setMap(null);
     onFenceComplete(coords);
   };
@@ -148,17 +148,14 @@ export const ManagerMap = ({
   const onRectangleComplete = (rectangle: google.maps.Rectangle) => {
     const bounds = rectangle.getBounds();
     if (!bounds) return;
-
     const ne = bounds.getNorthEast();
     const sw = bounds.getSouthWest();
-
     const coords: { lat: number; lng: number }[] = [
-      { lat: ne.lat(), lng: sw.lng() }, // NW
-      { lat: ne.lat(), lng: ne.lng() }, // NE
-      { lat: sw.lat(), lng: ne.lng() }, // SE
-      { lat: sw.lat(), lng: sw.lng() }, // SW
+      { lat: ne.lat(), lng: sw.lng() },
+      { lat: ne.lat(), lng: ne.lng() },
+      { lat: sw.lat(), lng: ne.lng() },
+      { lat: sw.lat(), lng: sw.lng() },
     ];
-
     rectangle.setMap(null);
     onFenceComplete(coords);
   };
@@ -167,23 +164,16 @@ export const ManagerMap = ({
     const center = circle.getCenter();
     const radius = circle.getRadius();
     if (!center) return;
-
     const numPoints = 32;
     const coords: { lat: number; lng: number }[] = [];
-
     for (let i = 0; i < numPoints; i++) {
       const angle = (i / numPoints) * 2 * Math.PI;
       const latOffset = (radius / 111320) * Math.cos(angle);
       const lngOffset =
         (radius / (111320 * Math.cos((center.lat() * Math.PI) / 180))) *
         Math.sin(angle);
-
-      coords.push({
-        lat: center.lat() + latOffset,
-        lng: center.lng() + lngOffset,
-      });
+      coords.push({ lat: center.lat() + latOffset, lng: center.lng() + lngOffset });
     }
-
     circle.setMap(null);
     onFenceComplete(coords);
   };
@@ -192,9 +182,7 @@ export const ManagerMap = ({
     return (
       <div className="flex items-center justify-center h-full bg-muted">
         <div className="text-center">
-          <p className="text-destructive font-medium">
-            Failed to load Google Maps
-          </p>
+          <p className="text-destructive font-medium">Failed to load Google Maps</p>
           <p className="text-sm text-muted-foreground mt-1">
             Please check your API key configuration
           </p>
@@ -203,20 +191,12 @@ export const ManagerMap = ({
     );
   }
 
-  if (!isLoaded) {
-    return <Skeleton className="w-full h-full" />;
-  }
+  if (!isLoaded) return <Skeleton className="w-full h-full" />;
 
   const getDrawingMode = () => {
-    if (drawingMode === "polygon") {
-      return google.maps.drawing.OverlayType.POLYGON;
-    }
-    if (drawingMode === "rectangle") {
-      return google.maps.drawing.OverlayType.RECTANGLE;
-    }
-    if (drawingMode === "circle") {
-      return google.maps.drawing.OverlayType.CIRCLE;
-    }
+    if (drawingMode === "polygon")   return google.maps.drawing.OverlayType.POLYGON;
+    if (drawingMode === "rectangle") return google.maps.drawing.OverlayType.RECTANGLE;
+    if (drawingMode === "circle")    return google.maps.drawing.OverlayType.CIRCLE;
     return null;
   };
 
@@ -244,27 +224,18 @@ export const ManagerMap = ({
             drawingMode: getDrawingMode(),
             drawingControl: false,
             polygonOptions: {
-              fillColor: "#3b82f6",
-              fillOpacity: 0.3,
-              strokeColor: "#3b82f6",
-              strokeWeight: 2,
-              editable: true,
+              fillColor: "#3b82f6", fillOpacity: 0.3,
+              strokeColor: "#3b82f6", strokeWeight: 2, editable: true,
             },
             rectangleOptions: {
-              fillColor: "#3b82f6",
-              fillOpacity: 0.3,
-              strokeColor: "#3b82f6",
-              strokeWeight: 2,
-              editable: true,
-              draggable: true,
+              fillColor: "#3b82f6", fillOpacity: 0.3,
+              strokeColor: "#3b82f6", strokeWeight: 2,
+              editable: true, draggable: true,
             },
             circleOptions: {
-              fillColor: "#3b82f6",
-              fillOpacity: 0.3,
-              strokeColor: "#3b82f6",
-              strokeWeight: 2,
-              editable: true,
-              draggable: true,
+              fillColor: "#3b82f6", fillOpacity: 0.3,
+              strokeColor: "#3b82f6", strokeWeight: 2,
+              editable: true, draggable: true,
             },
           }}
         />
@@ -293,16 +264,12 @@ export const ManagerMap = ({
             <Polygon
               paths={fence.coordinates}
               options={{
-                strokeColor: fence.isGreenCorridor
-                  ? "#86efac"
-                  : fence.color || "#22c55e",
+                strokeColor:  fence.isGreenCorridor ? "#86efac" : fence.color || "#22c55e",
                 strokeOpacity: 1,
-                strokeWeight: 2,
-                fillColor: fence.isGreenCorridor
-                  ? "#86efac"
-                  : fence.color || "#22c55e",
-                fillOpacity: fence.isGreenCorridor ? 0.08 : 0.18,
-                zIndex: fence.isGreenCorridor ? 1 : 2,
+                strokeWeight:  2,
+                fillColor:    fence.isGreenCorridor ? "#86efac" : fence.color || "#22c55e",
+                fillOpacity:  fence.isGreenCorridor ? 0.08 : 0.18,
+                zIndex:       fence.isGreenCorridor ? 1 : 2,
               }}
             />
             <Marker
@@ -325,8 +292,11 @@ export const ManagerMap = ({
         );
       })}
 
-      {/* Worker Markers — uses visibleDeviceLocations to respect showOfflineDevices */}
+      {/* ✅ Worker Markers — skips devices with no valid GPS/PEER fix */}
       {Array.from(visibleDeviceLocations.entries()).map(([deviceId, location]) => {
+        // ✅ FIX Bug 1: Skip rendering if lat=0,lon=0 or src=NONE
+        if (!hasValidLocation(location)) return null;
+
         const status = getWorkerStatus(deviceId, location);
         return (
           <Marker
@@ -336,7 +306,7 @@ export const ManagerMap = ({
             icon={{
               path: PIN_PATH,
               scale: 1.5,
-              fillColor: getMarkerColor(deviceId),
+              fillColor: getMarkerColor(deviceId, location),
               fillOpacity: 1,
               strokeColor: "#ffffff",
               strokeWeight: 1,
@@ -354,16 +324,14 @@ export const ManagerMap = ({
         );
       })}
 
-      {/* BLE Connection Lines — uses visibleDeviceLocations */}
+      {/* ✅ BLE Connection Lines — skips pairs where either end has no valid location */}
       {(() => {
-        const blePairs: {
-          from: GPSLocation;
-          to: GPSLocation;
-          distance: number;
-        }[] = [];
+        const blePairs: { from: GPSLocation; to: GPSLocation; distance: number }[] = [];
         const processedPairs = new Set<string>();
 
         visibleDeviceLocations.forEach((loc, deviceId) => {
+          // ✅ FIX Bug 2: Skip BLE lines if either endpoint is at 0,0
+          if (!hasValidLocation(loc)) return;
           if (loc.locationSource === "PEER" && loc.pairId && loc.pairId > 0) {
             const peerEntry = Array.from(visibleDeviceLocations.entries()).find(
               ([peerId]) => {
@@ -372,15 +340,11 @@ export const ManagerMap = ({
               },
             );
 
-            if (peerEntry) {
+            if (peerEntry && hasValidLocation(peerEntry[1])) {
               const pairKey = [deviceId, peerEntry[0]].sort().join("|");
               if (!processedPairs.has(pairKey)) {
                 processedPairs.add(pairKey);
-                blePairs.push({
-                  from: loc,
-                  to: peerEntry[1],
-                  distance: loc.peerDistance || 0,
-                });
+                blePairs.push({ from: loc, to: peerEntry[1], distance: loc.peerDistance || 0 });
               }
             }
           }
@@ -395,28 +359,23 @@ export const ManagerMap = ({
               <Polyline
                 path={[
                   { lat: pair.from.latitude, lng: pair.from.longitude },
-                  { lat: pair.to.latitude, lng: pair.to.longitude },
+                  { lat: pair.to.latitude,   lng: pair.to.longitude   },
                 ]}
                 options={{
                   strokeColor: "#3b82f6",
                   strokeOpacity: 0.8,
                   strokeWeight: 2,
-                  icons: [
-                    {
-                      icon: { path: "M 0,-1 0,1", strokeOpacity: 1, scale: 3 },
-                      offset: "0",
-                      repeat: "12px",
-                    },
-                  ],
+                  icons: [{
+                    icon: { path: "M 0,-1 0,1", strokeOpacity: 1, scale: 3 },
+                    offset: "0",
+                    repeat: "12px",
+                  }],
                 }}
               />
               {pair.distance > 0 && (
                 <Marker
                   position={{ lat: midLat, lng: midLng }}
-                  icon={{
-                    path: google.maps.SymbolPath.CIRCLE,
-                    scale: 0,
-                  }}
+                  icon={{ path: google.maps.SymbolPath.CIRCLE, scale: 0 }}
                   label={{
                     text: `${pair.distance.toFixed(1)}m`,
                     color: "#3b82f6",
@@ -440,35 +399,21 @@ export const ManagerMap = ({
           <div className="min-w-[200px] font-[Lexend,sans-serif]">
             <div
               className="px-3 py-2 rounded-t-md"
-              style={{
-                background: "linear-gradient(135deg, #84994F 0%, #6b7a3f 100%)",
-              }}
+              style={{ background: "linear-gradient(135deg, #84994F 0%, #6b7a3f 100%)" }}
             >
-              <h3 className="font-semibold text-sm text-white">
-                {infoWindow.deviceId}
-              </h3>
+              <h3 className="font-semibold text-sm text-white">{infoWindow.deviceId}</h3>
             </div>
 
-            <div
-              className="px-3 py-2 space-y-2 rounded-b-md"
-              style={{ backgroundColor: "#faf8f0" }}
-            >
+            <div className="px-3 py-2 space-y-2 rounded-b-md" style={{ backgroundColor: "#faf8f0" }}>
               <div className="flex items-center justify-between">
-                <span
-                  className="text-xs font-medium"
-                  style={{ color: "#5a6b3a" }}
-                >
-                  Status
-                </span>
+                <span className="text-xs font-medium" style={{ color: "#5a6b3a" }}>Status</span>
                 <span
                   className="text-xs font-semibold px-2 py-0.5 rounded-full"
                   style={{
                     backgroundColor:
-                      infoWindow.status === "compliant"
-                        ? "#84994F"
-                        : infoWindow.status === "violation"
-                          ? "#A72703"
-                          : "#94a3b8",
+                      infoWindow.status === "compliant"  ? "#84994F" :
+                      infoWindow.status === "violation"  ? "#A72703" :
+                      infoWindow.status === "no-signal"  ? "#64748b" : "#94a3b8",
                     color: "#ffffff",
                   }}
                 >
@@ -480,27 +425,17 @@ export const ManagerMap = ({
 
               {infoWindow.location.locationSource && (
                 <div className="flex items-center justify-between">
-                  <span
-                    className="text-xs font-medium"
-                    style={{ color: "#5a6b3a" }}
-                  >
-                    Source
-                  </span>
+                  <span className="text-xs font-medium" style={{ color: "#5a6b3a" }}>Source</span>
                   <span
                     className="text-xs font-semibold px-2 py-0.5 rounded-full"
                     style={{
                       backgroundColor:
-                        infoWindow.location.locationSource === "GPS"
-                          ? "#22c55e"
-                          : infoWindow.location.locationSource === "PEER"
-                            ? "#3b82f6"
-                            : "#ef4444",
+                        infoWindow.location.locationSource === "GPS"  ? "#22c55e" :
+                        infoWindow.location.locationSource === "PEER" ? "#3b82f6" : "#ef4444",
                       color: "#ffffff",
                     }}
                   >
-                    {infoWindow.location.locationSource === "PEER"
-                      ? "BLE Peer"
-                      : infoWindow.location.locationSource}
+                    {infoWindow.location.locationSource === "PEER" ? "BLE Peer" : infoWindow.location.locationSource}
                   </span>
                 </div>
               )}
@@ -509,10 +444,7 @@ export const ManagerMap = ({
                 infoWindow.location.pairId &&
                 infoWindow.location.pairId > 0 && (
                   <div>
-                    <span
-                      className="text-xs font-medium block"
-                      style={{ color: "#5a6b3a" }}
-                    >
+                    <span className="text-xs font-medium block" style={{ color: "#5a6b3a" }}>
                       Paired Device
                     </span>
                     <span className="text-xs" style={{ color: "#3d4a28" }}>
@@ -527,12 +459,7 @@ export const ManagerMap = ({
               <div className="border-t" style={{ borderColor: "#e5e2d3" }} />
 
               <div>
-                <span
-                  className="text-xs font-medium block"
-                  style={{ color: "#5a6b3a" }}
-                >
-                  Position
-                </span>
+                <span className="text-xs font-medium block" style={{ color: "#5a6b3a" }}>Position</span>
                 <span className="text-xs" style={{ color: "#3d4a28" }}>
                   {infoWindow.location.latitude.toFixed(6)},{" "}
                   {infoWindow.location.longitude.toFixed(6)}
@@ -540,12 +467,7 @@ export const ManagerMap = ({
               </div>
 
               <div>
-                <span
-                  className="text-xs font-medium block"
-                  style={{ color: "#5a6b3a" }}
-                >
-                  Last Update
-                </span>
+                <span className="text-xs font-medium block" style={{ color: "#5a6b3a" }}>Last Update</span>
                 <span className="text-xs" style={{ color: "#3d4a28" }}>
                   {new Date(infoWindow.location.timestamp).toLocaleString()}
                 </span>
