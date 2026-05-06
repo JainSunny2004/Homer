@@ -20,6 +20,7 @@ serve(async (req) => {
 
     let device_id, lat, lon, ax, ay, az, src, p_dist, Pair_id;
     let own_lat, own_lon, own_gps_valid, peer_lat, peer_lon, peer_dist, peer_id, peer_valid;
+    let altitude: number | null;
 
     const url = new URL(req.url);
 
@@ -44,6 +45,8 @@ serve(async (req) => {
       peer_dist = parseFloat(url.searchParams.get('peer_dist') || '0');
       peer_id = parseInt(url.searchParams.get('peer_id') || '0');
       peer_valid = url.searchParams.get('peer_valid') === '1';
+      const altStr = url.searchParams.get('alt');
+      altitude = altStr !== null ? parseFloat(altStr) : null;
 
     } else {
       const body = await req.json();
@@ -51,6 +54,7 @@ serve(async (req) => {
         device_id, lat, lon, ax, ay, az, src, p_dist, Pair_id,
         own_lat, own_lon, own_gps_valid, peer_lat, peer_lon, peer_dist, peer_id, peer_valid
       } = body);
+      altitude = body.alt !== undefined ? parseFloat(body.alt) : null;
     }
 
     // Basic validation
@@ -84,6 +88,7 @@ serve(async (req) => {
         peer_dist: peer_dist || 0,
         peer_id: peer_id || 0,
         peer_valid: peer_valid || false,
+        altitude: altitude ?? null,
       });
 
     if (error) {

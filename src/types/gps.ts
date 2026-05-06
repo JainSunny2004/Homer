@@ -21,6 +21,8 @@ export interface GPSLocation {
   // Sprint 1
   battery?: number;
   impact?: boolean;
+  // Altitude (metres above sea level) — from GPS module
+  altitude?: number;
 }
 
 export interface Geofence {

@@ -57,8 +57,9 @@ export const useGPSData = (options: UseGPSDataOptions = {}): UseGPSDataReturn =>
           peerDist:       loc.peer_dist     || 0,
           peerId:         loc.peer_id       || 0,
           peerValid:      loc.peer_valid    || false,
-          battery:        loc.battery       ?? 0,    // Sprint 1
-          impact:         loc.impact        ?? false, // Sprint 1
+          battery:        loc.battery       ?? 0,
+          impact:         loc.impact        ?? false,
+          altitude:       loc.altitude      ?? undefined,
         }));
 
         console.log('✅ Mapped locations:', mappedLocations);
