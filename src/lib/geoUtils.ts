@@ -39,6 +39,43 @@ export function getPolygonCenter(
   return { lat: sum.lat / coords.length, lng: sum.lng / coords.length };
 }
 
+// ─── Altitude Band ────────────────────────────────────────────────────────────
+export type AltitudeBand = "ground" | "level1" | "level2" | "level3plus" | "unknown";
+
+export function getAltitudeBand(altitudeMeters: number | undefined): AltitudeBand {
+  if (altitudeMeters === undefined || altitudeMeters === null) return "unknown";
+  if (altitudeMeters < 4)  return "ground";
+  if (altitudeMeters < 8)  return "level1";
+  if (altitudeMeters < 12) return "level2";
+  return "level3plus";
+}
+
+export const ALTITUDE_BAND_COLOR: Record<AltitudeBand, string> = {
+  ground:     "#22c55e",
+  level1:     "#eab308",
+  level2:     "#f97316",
+  level3plus: "#ef4444",
+  unknown:    "#94a3b8",
+};
+
+export const ALTITUDE_BAND_LABEL: Record<AltitudeBand, string> = {
+  ground:     "Ground (< 4 m)",
+  level1:     "Level 1 (4–8 m)",
+  level2:     "Level 2 (8–12 m)",
+  level3plus: "Level 3+ (≥ 12 m)",
+  unknown:    "Altitude Unknown",
+};
+
+// ─── 3-D Distance (metres) ────────────────────────────────────────────────────
+export function distance3D(
+  p1: { lat: number; lng: number; altitude?: number },
+  p2: { lat: number; lng: number; altitude?: number }
+): number {
+  const horizontal = haversineDistance(p1, p2);
+  const dAlt = (p2.altitude ?? 0) - (p1.altitude ?? 0);
+  return Math.sqrt(horizontal ** 2 + dAlt ** 2);
+}
+
 // ─── Haversine Distance (metres) ──────────────────────────────────────────────
 export function haversineDistance(
   p1: { lat: number; lng: number },

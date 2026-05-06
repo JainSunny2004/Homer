@@ -27,7 +27,7 @@ interface ElevationPanelProps {
   onClose: () => void;
 }
 
-const FLOOR_HEIGHT = 4; // metres per construction floor
+const FLOOR_HEIGHT = 4;
 const FLOOR_LABELS = ["Ground", "L1", "L2", "L3", "L4", "L5"];
 
 function getFloorLabel(alt: number) {
@@ -35,7 +35,6 @@ function getFloorLabel(alt: number) {
   return FLOOR_LABELS[floor] ?? `L${floor}`;
 }
 
-// Custom tooltip for the bar chart
 const CustomTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
@@ -58,7 +57,6 @@ export const ElevationPanel = ({
   deviceTimeoutSeconds = 60,
   onClose,
 }: ElevationPanelProps) => {
-  // Latest location per device, online only
   const deviceLatest = useMemo(() => {
     const map = new Map<string, GPSLocation>();
     const cutoff = Date.now() - deviceTimeoutSeconds * 1000;
@@ -82,7 +80,6 @@ export const ElevationPanel = ({
             altitude: loc.altitude ?? null,
             band,
             fill: ALTITUDE_BAND_COLOR[band],
-            // bar value — use 0.5 as floor for unknown so it still appears
             value: loc.altitude ?? 0,
           };
         })
@@ -90,7 +87,6 @@ export const ElevationPanel = ({
     [deviceLatest],
   );
 
-  // Pairwise height differences for online devices that have altitude
   const heightDiffs = useMemo(() => {
     const withAlt = deviceLatest.filter((l) => l.altitude !== undefined);
     const pairs: { a: string; b: string; dAlt: number; dist3d: number; dist2d: number }[] = [];
@@ -124,7 +120,6 @@ export const ElevationPanel = ({
 
   return (
     <div className="flex flex-col h-full bg-card border-l overflow-hidden">
-      {/* Header */}
       <div
         className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0"
         style={{ background: "linear-gradient(135deg, #84994F 0%, #6b7a3f 100%)" }}
@@ -170,10 +165,7 @@ export const ElevationPanel = ({
               Worker Elevation
             </p>
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart
-                data={chartData}
-                margin={{ top: 8, right: 8, left: 0, bottom: 24 }}
-              >
+              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 24 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 {floorLines.map((y) => (
                   <ReferenceLine

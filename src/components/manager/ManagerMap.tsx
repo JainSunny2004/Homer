@@ -11,7 +11,13 @@ import {
 import { GPSLocation, PolygonFence, WorkerAssignment } from "@/types/gps";
 import { MAP_CONFIG } from "@/config/api";
 import { Skeleton } from "@/components/ui/skeleton";
-import { isPointInPolygon, isWithinShift } from "@/lib/geoUtils";
+import {
+  isPointInPolygon,
+  isWithinShift,
+  getAltitudeBand,
+  ALTITUDE_BAND_COLOR,
+  ALTITUDE_BAND_LABEL,
+} from "@/lib/geoUtils";
 import { DrawingMode } from "./FencePanel";
 import React from "react";
 
@@ -109,15 +115,9 @@ export const ManagerMap = ({
     return "violation";
   };
 
-  const getMarkerColor = (deviceId: string, location: GPSLocation): string => {
-    // ✅ Grey out marker if no valid location
+  const getMarkerColor = (_deviceId: string, location: GPSLocation): string => {
     if (!hasValidLocation(location)) return "#64748b";
-
-    const assignment = assignments.find((a) => a.workerId === deviceId);
-    if (!assignment) return "#94a3b8";
-
-    const fence = fences.find((f) => f.id === assignment.fenceId);
-    return fence?.color || "#94a3b8";
+    return ALTITUDE_BAND_COLOR[getAltitudeBand(location.altitude)];
   };
 
   const getStatusLabel = (
@@ -463,6 +463,21 @@ export const ManagerMap = ({
                 <span className="text-xs" style={{ color: "#3d4a28" }}>
                   {infoWindow.location.latitude.toFixed(6)},{" "}
                   {infoWindow.location.longitude.toFixed(6)}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-xs font-medium block" style={{ color: "#5a6b3a" }}>Altitude</span>
+                <span
+                  className="text-xs font-semibold px-2 py-0.5 rounded-full inline-block"
+                  style={{
+                    backgroundColor: ALTITUDE_BAND_COLOR[getAltitudeBand(infoWindow.location.altitude)],
+                    color: "#ffffff",
+                  }}
+                >
+                  {infoWindow.location.altitude !== undefined
+                    ? `${infoWindow.location.altitude.toFixed(1)} m — ${ALTITUDE_BAND_LABEL[getAltitudeBand(infoWindow.location.altitude)]}`
+                    : ALTITUDE_BAND_LABEL["unknown"]}
                 </span>
               </div>
 
