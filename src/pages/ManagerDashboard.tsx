@@ -20,6 +20,7 @@ import {
 import { WorkerPanel } from "@/components/manager/WorkerPanel";
 import { SettingsDialog } from "@/components/manager/SettingsDialog";
 import { AlertsHistoryPanel } from "@/components/manager/AlertsHistoryPanel";
+import { ElevationPanel } from "@/components/manager/ElevationPanel";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -31,6 +32,7 @@ import {
   Bell,
   Moon,
   Sun,
+  Mountain,
 } from "lucide-react";
 import homerLogo from "@/assets/homer-logo.gif";
 import { PolygonFence } from "@/types/gps";
@@ -48,6 +50,7 @@ const ManagerDashboard = () => {
   const [isCreatingFence, setIsCreatingFence] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [alertsPanelOpen, setAlertsPanelOpen] = useState(false);
+  const [elevationPanelOpen, setElevationPanelOpen] = useState(false);
 
   // ── Dark mode ────────────────────────────────────────────────────────────
   const [isDark, setIsDark] = useState(() => {
@@ -382,6 +385,17 @@ const ManagerDashboard = () => {
 
             <div className="w-px h-4 bg-border mx-0.5" />
 
+            {/* Elevation view */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-7 w-7 rounded-lg hover:bg-card ${elevationPanelOpen ? "bg-card" : ""}`}
+              onClick={() => setElevationPanelOpen((o) => !o)}
+              title="Elevation View"
+            >
+              <Mountain className="h-3.5 w-3.5 text-foreground" />
+            </Button>
+
             {/* Alerts bell */}
             <Button
               variant="ghost"
@@ -536,6 +550,27 @@ const ManagerDashboard = () => {
             pendingCoords={pendingCoords}
             onClearPendingCoords={() => setPendingCoords(null)}
           />
+        )}
+
+        {elevationPanelOpen && !isCreatingFence && (
+          <>
+            <div
+              className="resize-handle"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                alertsResizing.current = true;
+                document.body.style.cursor = "col-resize";
+                document.body.style.userSelect = "none";
+              }}
+            />
+            <div style={{ width: 320 }} className="flex-shrink-0 h-full">
+              <ElevationPanel
+                locations={locations ?? []}
+                deviceTimeoutSeconds={settings.deviceTimeoutSeconds}
+                onClose={() => setElevationPanelOpen(false)}
+              />
+            </div>
+          </>
         )}
 
         {alertsPanelOpen && !isCreatingFence && (
